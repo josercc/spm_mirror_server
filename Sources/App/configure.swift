@@ -6,6 +6,7 @@ public func configure(_ app: Application) throws {
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
     app.http.server.configuration.port = 9090
+    app.http.server.configuration.hostname = "0.0.0.0"
     
     // register routes
     try routes(app)
