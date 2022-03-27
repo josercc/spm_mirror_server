@@ -9,5 +9,5 @@ import Foundation
 
 struct UpdateRepoResponse: Codable {
     let url:String
-    let lastUpdateTime:TimeInterval
+    var lastUpdateTime:TimeInterval
 }

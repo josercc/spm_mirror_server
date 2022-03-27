@@ -40,9 +40,9 @@ func checkIsExit(path:String, isDir:Bool) -> Bool {
 //    }
 //}
 //
-//func mirrorRepo(repo:String) -> String {
-//    return "https://gitee.com/swift-package-manager-mirror/\(repo)"
-//}
+func mirrorRepo(repo:String) -> String {
+    return "https://gitee.com/swift-package-manager-mirror/\(repo)"
+}
 //
 //func createProject(req:Request,
 //                   importUrl:String,

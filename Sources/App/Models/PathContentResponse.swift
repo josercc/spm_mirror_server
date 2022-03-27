@@ -10,4 +10,5 @@ import Vapor
 
 struct PathContentResponse: Content {
     let content:String
+    let sha:String
 }

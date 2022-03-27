@@ -17,4 +17,12 @@ extension HTTPResponseStatus {
                                                                 reasonPhrase: "获取路径下内容错误")
     static let updateRepoJsonError:HTTPResponseStatus = .custom(code: 10003,
                                                                 reasonPhrase: "获取更新库数据出错!")
+    static let syncRepoError:HTTPResponseStatus = .custom(code: 10004,
+                                                  reasonPhrase: "同步仓库失败")
+    static let toJsonStringError:HTTPResponseStatus = .custom(code: 10005,
+                                                              reasonPhrase: "转变 JSON 字符串失败")
+    static let createRepoFetching:HTTPResponseStatus = .custom(code: 10006,
+                                                               reasonPhrase: "创建仓库同步中，稍后再试")
+    static let systemError:HTTPResponseStatus = .custom(code: 20000,
+                                                        reasonPhrase: "系统错误")
 }

@@ -13,11 +13,11 @@ class GiteeApi {
     final let token:String
     final let session:String
     init() throws {
-        guard let token = ProcessInfo.processInfo.environment["GITEE_TOKEN"] else {
+        guard let token = Environment.get("GITEE_TOKEN") else {
             throw Abort(.tokenNotExit)
         }
         self.token = token
-        guard let session = ProcessInfo.processInfo.environment["GITEE_SESSION"] else {
+        guard let session = Environment.get("GITEE_SESSION") else {
             throw Abort(.sessionNotExit)
         }
         self.session = session
@@ -46,14 +46,62 @@ class GiteeApi {
     func getPathContent(use req:Request,
                         owner:String,
                         repo:String,
-                        path:String) async throws -> String {
+                        path:String) async throws -> PathContentResponse {
         let uri = URI(string: "\(host)/repos/\(owner)/\(repo)/contents/\(path)?access_token=\(token)")
         let response = try await req.client.get(uri)
         let content = try response.content.decode(PathContentResponse.self)
-        guard let data = Data(base64Encoded: content.content),
-                let fileContent = String(data: data, encoding: .utf8) else {
-            throw Abort(.getPathContentError)
+        return content
+    }
+    
+    func syncProject(name:String, req:Request) async throws -> Bool {
+        let uri = URI(string: "https://gitee.com/swift-package-manager-mirror/\(name)/force_sync_project")
+        let response = try await req.client.post(uri, beforeSend: { request in
+            request.headers.cookie = cookies()
+        })
+        return response.status.code == 200
+    }
+    
+    func updateContent(content:String,
+                       req:Request,
+                       repoPath:String,
+                       path:String,
+                       owner:String,
+                       sha:String,
+                       message:String) async throws -> Bool {
+        let url = "https://gitee.com/api/v5/repos/\(owner)/\(repoPath)/contents/\(path)"
+        let response = try await req.client.put(URI(string: url), beforeSend: { request in
+            try request.content.encode([
+                "access_token": token,
+                "content": content,
+                "sha": sha,
+                "message": message
+            ])
+        })
+        return response.status.code == 200
+    }
+    
+    func createProject(req:Request,
+                       importUrl:String,
+                       name:String) async throws -> Bool {
+        let url = "https://gitee.com/swift-package-manager-mirror/projects"
+        let response = try await req.client.post(URI(string: url)) { request in
+            try request.content.encode([
+                "project[import_url]":importUrl,
+                "project[name]":name,
+                "project[namespace_path]":"swift-package-manager-mirror",
+                "project[path]":name,
+                "project[description]":importUrl,
+                "project[public]":"1",
+                "language":"63",
+            ])
+            request.headers.cookie = cookies()
         }
-        return fileContent
+        return response.status.code == 200
+    }
+    
+    func cookies() -> HTTPCookies {
+        var cookies = HTTPCookies()
+        cookies["gitee-session-n"] = HTTPCookies.Value(string: session)
+        return cookies
     }
 }
