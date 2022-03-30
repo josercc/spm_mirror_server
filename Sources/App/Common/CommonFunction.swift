@@ -27,7 +27,13 @@ func mirrorRepo(repo:String) -> String {
 
 func isOrg(name:String, req:Request) async throws -> Bool {
     let uri = URI(string: "https://api.github.com/users/\(name)")
-    let response = try await req.client.get(uri)
+    print(uri)
+    let response = try await req.client.get(uri, beforeSend: { request in
+        var headers = HTTPHeaders()
+        headers.add(name: .userAgent,
+                    value: userAgent)
+        request.headers = headers
+    })
     let userInfo = try response.content.decode(GithubUserInfo.self)
     return userInfo.type == "Organization"
 }
@@ -78,4 +84,6 @@ func gitUser(from url:String) -> String? {
     
 }
 
-
+let userAgent = """
+"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15"
+"""
