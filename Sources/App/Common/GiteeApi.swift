@@ -11,36 +11,31 @@ import Vapor
 class GiteeApi {
     final let host = "https://gitee.com/api/v5"
     final let token:String
-    final let session:String
+    final let githubToken:String
     init() throws {
         guard let token = Environment.get("GITEE_TOKEN") else {
             throw Abort(.tokenNotExit)
         }
         self.token = token
-        guard let session = Environment.get("GITEE_SESSION") else {
-            throw Abort(.sessionNotExit)
+        guard let githubToken = Environment.get("GITHUB_TOKEN") else {
+            throw Abort(.tokenNotExit)
         }
-        self.session = session
+        self.githubToken = githubToken
     }
     
-    func checkFetck(name:String, req:Request, retryCount:Int = 0) async throws -> CheckFetch {
+    func checkFetck(name:String, req:Request) async throws -> CheckFetch {
         let url = "https://gitee.com/swift-package-manager-mirror/\(name)/check_fetch"
         print("get \(url)")
         let response = try await req.client.get(URI(string: url))
+        guard let body = response.body,
+              let _ = try? JSONSerialization.jsonObject(with: body,
+                                                        options: .fragmentsAllowed) else {
+            return CheckFetch(inFetch: false, emptyRepo: true)
+        }
+        
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let checkFetch = try response.content.decode(CheckFetch.self, using: decoder)
-        guard !checkFetch.inFetch else {
-            return checkFetch
-        }
-        guard retryCount > 0 else {
-            return checkFetch
-        }
-        /// 延时一秒再次请求
-        let _ = try await req.application.threadPool.runIfActive(eventLoop: req.eventLoop, {
-            sleep(1)
-        }).get()
-        return try await checkFetck(name: name, req: req, retryCount: retryCount - 1)
+        return try response.content.decode(CheckFetch.self, using: decoder)
     }
     
     func getPathContent(use req:Request,
@@ -52,15 +47,7 @@ class GiteeApi {
         let content = try response.content.decode(PathContentResponse.self)
         return content
     }
-    
-    func syncProject(name:String, req:Request) async throws -> Bool {
-        let uri = URI(string: "https://gitee.com/swift-package-manager-mirror/\(name)/force_sync_project")
-        let response = try await req.client.post(uri, beforeSend: { request in
-            request.headers.cookie = cookies()
-        })
-        return response.status.code == 200
-    }
-    
+        
     func updateContent(content:String,
                        req:Request,
                        repoPath:String,
@@ -80,28 +67,18 @@ class GiteeApi {
         return response.status.code == 200
     }
     
-    func createProject(req:Request,
-                       importUrl:String,
-                       name:String) async throws -> Bool {
-        let url = "https://gitee.com/swift-package-manager-mirror/projects"
-        let response = try await req.client.post(URI(string: url)) { request in
+    func addGithubAction(fileName:String, req:Request, content:String) async throws {
+        let url = "https://api.github.com/repos/josercc/sync2gitee/contents/.github/workflows/fileName.yml";
+        let uri = URI(string: url)
+        let _ = try await req.client.put(uri, beforeSend: { request in
+            var headers = HTTPHeaders()
+            headers.add(name: .authorization, value: "Bearer \(githubToken)")
+            request.headers = headers
             try request.content.encode([
-                "project[import_url]":importUrl,
-                "project[name]":name,
-                "project[namespace_path]":"swift-package-manager-mirror",
-                "project[path]":name,
-                "project[description]":importUrl,
-                "project[public]":"1",
-                "language":"63",
-            ])
-            request.headers.cookie = cookies()
-        }
-        return response.status.code == 200
-    }
-    
-    func cookies() -> HTTPCookies {
-        var cookies = HTTPCookies()
-        cookies["gitee-session-n"] = HTTPCookies.Value(string: session)
-        return cookies
+                "message": "create \(fileName)",
+                "content": try content.encodeBase64String()
+            ], as: .json)
+        })
+        
     }
 }

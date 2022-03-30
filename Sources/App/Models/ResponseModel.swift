@@ -14,9 +14,9 @@ struct ResponseModel<T: Content>: Content {
     let data:T?
     let isSuccess:Bool
     
-    init(success data:T) {
+    init(success data:T, message:String = "请求成功") {
         self.code = 200
-        self.message = "请求成功"
+        self.message = message
         self.data = data
         self.isSuccess = true
     }
