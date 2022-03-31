@@ -2,52 +2,26 @@
 //  Mirror.swift
 //  
 //
-//  Created by admin on 2022/3/14.
+//  Created by 张行 on 2022/3/31.
 //
 
 import Foundation
-import SwiftShell
-import Vapor
+import FluentKit
 
-struct Mirror {}
-
-extension Mirror {
-    struct Request: Content, Validatable {
-        static func validations(_ validations: inout Validations) {
-            validations.add("url",
-                            as: String.self,
-                            is: .github,
-                            required: true)
-        }
-        
-        let url:String
-    }
-}
-
-extension Validator {
-    static var github: Validator<String> {
-        .init { data in
-            let name = mirrData(from: data).components(separatedBy: "/")
-            guard data.contains("https://github.com"), name.count == 2 else {
-                return GithubResult(failure: "url 不是一个 github Package 地址")
-            }
-            return GithubResult(success: "\(data) 验证 ok")
-        }
-    }
-}
-
-struct GithubResult: ValidatorResult {
-    var isFailure: Bool
-    var successDescription: String?
-    var failureDescription: String?
-    init(success message:String) {
-        self.isFailure = false
-        self.successDescription = message
-    }
+final class Mirror: Model {
     
-    init(failure message:String) {
-        self.isFailure = true
-        self.failureDescription = message
+    static var schema: String { "mirror" }
+    
+    @ID(key: .id)
+    var id: UUID?
+    
+    @Field(key: "origin")
+    var origin:String
+    
+    @Field(key: "mirror")
+    var mirror:String
+    
+    init() {
+        
     }
 }
-
