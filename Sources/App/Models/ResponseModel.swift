@@ -14,9 +14,9 @@ struct ResponseModel<T: Content>: Content {
     let message:String
     let data:T?
     let isSuccess:Bool
-    let page:Page?
+    let page:PageMetadata?
     
-    init(success data:T, message:String = "请求成功", page:Page? = nil) {
+    init(success data:T, message:String = "请求成功", page:PageMetadata? = nil) {
         self.code = 200
         self.message = message
         self.data = data
@@ -30,17 +30,5 @@ struct ResponseModel<T: Content>: Content {
         self.isSuccess = false
         self.data = nil
         self.page = nil
-    }
-}
-
-extension ResponseModel {
-    struct Page: Content {
-        let page: Int
-        let per: Int
-        let total: Int
-        var pageCount: Int {
-            let count = Int((Double(self.total)/Double(self.per)).rounded(.up))
-            return count < 1 ? 1 : count
-        }
     }
 }

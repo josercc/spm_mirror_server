@@ -10,70 +10,87 @@ import Vapor
 import FluentKit
 
 /// 自动执行镜像的任务
-class AutoMirrorJob {
+public class AutoMirrorJob {
     let githubApi:GithubApi
     let giteeApi:GiteeApi
     let app:Application
     let wxHook:WeiXinWebHooks
-    init(app:Application) throws {
+    public init(app:Application) throws {
         giteeApi = try GiteeApi()
         githubApi = try GithubApi()
         self.app = app
         self.wxHook = try WeiXinWebHooks()
     }
     /// 执行任务
-    func start() {
+    public func start() {
         Task {
-            /// 将当前状态更改为可以执行工作
+            app.logger.info("开始启动自动任务")
             await autoMirrorStatus.start()
             do {
                 /// 开始进行制作镜像
                 try await mirror()
             } catch(let e) {
                 if let abort = e as? Abort {
-                    /// 制作过程中发生了报错 将错误上传给
-                   await wxHook.sendContent(abort.reason, in: app.client)
+                    app.logger.info("自动任务异常:\(abort.reason) 正在上报到微信监控群...")
+                    wxHook.sendContent(abort.reason, in: app.client)
                 }
-                /// 是否是否可以继续进行任务
-               let canRun = await autoMirrorStatus.canRun
+                app.logger.info("查询是否可以继续进行自动任务")
+                let canRun = await autoMirrorStatus.canRun
                 guard canRun else {
+                    app.logger.info("不可以进行自动任务，自动任务结束。")
                     return
                 }
+                app.logger.info("可以进行自动任务，重新开始自动任务。")
                 start()
             }
         }
     }
     
     func mirror() async throws {
-        /// 等待制作镜像的任务完成
+        app.logger.info("查询是否有需要进行自动更新仓库")
         while true {
-            /// 查询正在等待制作的任务
-            let waitingMirror = try await Mirror.query(on: app.db).filter(\.$isExit == false).first()
-            /// 如果没有正在制作的任务则退出等待
-            guard let waitingMirror = waitingMirror else {
+            let date = Date().timeIntervalSince1970 - 7 * 24 * 60 * 60
+            let needUpdateMirror = try await Mirror.query(on: app.db).filter(\.$requestMirrorCount > 1000).filter(\.$lastMittorDate < date).first()
+            guard var mirror = needUpdateMirror else {
                 break
             }
-            /// 查询制作是否完毕
+            try await updateMirror(mirror: &mirror)
+        }
+        app.logger.info("准备进行查询是否还有未完成镜像")
+        while true {
+            app.logger.info("查询镜像还没有完成镜像")
+            let waitingMirror = try await Mirror.query(on: app.db).filter(\.$isExit == false).first()
+            guard let waitingMirror = waitingMirror else {
+                app.logger.info("查询镜像的任务都已经完成了，退出开始新的镜像任务。")
+                break
+            }
+            app.logger.info("查询到\(waitingMirror.origin)镜像还没有制作完成")
+            app.logger.info("查询镜像是否在 Gitee 中存在")
             let isExit = try await giteeApi.checkRepoExit(url: waitingMirror.mirror, in: app.client)
             guard !isExit else {
+                app.logger.info("\(waitingMirror.mirror)已经存在")
                 let ymlFilePath = try getYmlFilePath(url: waitingMirror.origin)
-                /// 删除文件
+                app.logger.info("删除\(ymlFilePath)文件")
                 try await githubApi.deleteYml(fileName: ymlFilePath, in: app.client)
-                /// 制作完毕 更新数据库数据
+                app.logger.info("更新镜像信息")
                 waitingMirror.isExit = true
                 try await waitingMirror.update(on: app.db)
                 continue
             }
-            sleep(30)
+            app.logger.info("\(waitingMirror.mirror)不存在，等待30秒重试")
+            let _ = try await app.threadPool.runIfActive(eventLoop: app.eventLoopGroup.next(), {
+                sleep(30)
+            }).get()
         }
-        /// 按照创建时间获取第一条等待执行镜像的数据
+        app.logger.info("查询等待镜像的队列")
         guard let stack = try await MirrorStack.query(on: app.db).sort(\.$create).first() else {
-            /// 如果数据库此时没有 则暂停任务
+            app.logger.info("镜像队列没有任务，自动任务退出!")
             await autoMirrorStatus.stop()
             return
         }
         /// 获取到需要镜像的仓库地址
         let originUrl = stack.url
+        app.logger.info("需要镜像仓库地址：\(originUrl)")
         /// 获取仓库的组织或者用户名称 比如 Vapor
         guard let src = repoOriginPath(from: originUrl) else {
             throw Abort(.custom(code: 10000, reasonPhrase: "\(originUrl)中获取组织或者用户失败"))
@@ -84,7 +101,7 @@ class AutoMirrorJob {
         }
         /// 生成对应的 Gtihub Action配置文件名称
         let ymlFile = try getYmlFilePath(url: originUrl)
-        /// 查询用户拥有的组织信息
+        app.logger.info("查询用户拥有的组织信息")
         let orgs = try await giteeApi.getUserOrg(client: app.client)
         /// 默认组织名称的数字
         var index = 0
@@ -93,22 +110,27 @@ class AutoMirrorJob {
         while true {
             /// 准备制作镜像的地址
             let mirrorPath = "https://gitee.com/\(orgName)/\(name)"
+            app.logger.info("准备制作:\(mirrorPath)")
             /// 获取准备制作的镜像是否已经存在
-            if let _ = try await Mirror.query(on: app.db).filter(\.$mirror == mirrorPath).first() {
+            if let mirror = try await Mirror.query(on: app.db).filter(\.$mirror == mirrorPath).first() {
+                app.logger.info("镜像地址已经被占用,占用仓库为\(mirror.origin)")
                 /// 制作的镜像已经存在被其他占用 更换镜像组织
                 index += 1
                 orgName += "\(index)"
                 continue
             }
             /// 判断当前的组织是否需要进行创建
+            app.logger.info("判断\(orgName)是否存在")
             if !orgs.contains(where: {$0.name == orgName}) {
                 /// 创建不存在的组织
+                app.logger.info("创建组织:\(orgName)")
                 try await giteeApi.createOrg(client: app.client, name: orgName)
             }
-            /// 查询是否已经创建yml 文件
+            app.logger.info("查询\(ymlFile)是否存在")
             let ymlExit = try await githubApi.ymlExit(file: ymlFile, in: app.client)
             if !ymlExit {
-                /// 查询仓库是否是组织
+                app.logger.info("\(ymlFile)已经存在")
+                app.logger.info("查询\(src)是否是组织")
                 let isOrg = try await githubApi.isOrg(name: src, client: app.client)
                 /// yml的内容
                 let ymlContent = actionContent(src: src,
@@ -116,19 +138,65 @@ class AutoMirrorJob {
                                                    isOrg: isOrg,
                                                    repo: name,
                                                    mirror: name)
-                /// 创建Github Action Yml
+                app.logger.info("创建\(ymlFile)文件")
                 guard try await githubApi.addGithubAction(fileName: ymlFile,
                                                           content: ymlContent,
                                                           client: app.client) else {
                     throw Abort(.custom(code: 10000, reasonPhrase: "创建\(ymlFile)文件失败"))
                 }
             }
+            app.logger.info("\(ymlFile)已经存在")
             let mirror = Mirror(origin: originUrl, mirror: mirrorPath)
-            /// 保存镜像数据到数据库
+            app.logger.info("保存镜像数据到数据库")
             try await mirror.save(on: app.db)
-            /// 删除制作镜像队列
+            app.logger.info("删除制作镜像队列")
             try await stack.delete(on: app.db)
         }
+    }
+    
+    func updateMirror( mirror:inout Mirror) async throws {
+        /// 准备制作镜像的地址
+        let mirrorPath = mirror.mirror
+        app.logger.info("准备更新:\(mirrorPath)")
+        /// 获取到需要镜像的仓库地址
+        let originUrl = mirror.origin
+        app.logger.info("需要镜像仓库地址：\(originUrl)")
+        /// 获取仓库的组织或者用户名称 比如 Vapor
+        guard let src = repoOriginPath(from: originUrl) else {
+            throw Abort(.custom(code: 10000, reasonPhrase: "\(originUrl)中获取组织或者用户失败"))
+        }
+        /// 获取仓库名称 比如 Vapor
+        guard let name = repoNamePath(from: originUrl) else {
+            throw Abort(.custom(code: 10000, reasonPhrase: "\(originUrl)中获取仓库名称失败"))
+        }
+        
+        guard let orgName = repoNamePath(from: mirror.mirror) else {
+            throw Abort(.custom(code: 10000, reasonPhrase: "\(mirror.mirror)中获取仓库名称失败"))
+        }
+        /// 生成对应的 Gtihub Action配置文件名称
+        let ymlFile = try getYmlFilePath(url: mirror.origin)
+        app.logger.info("查询\(ymlFile)是否存在")
+        let ymlExit = try await githubApi.ymlExit(file: ymlFile, in: app.client)
+        if !ymlExit {
+            app.logger.info("\(ymlFile)已经存在")
+            app.logger.info("查询\(src)是否是组织")
+            let isOrg = try await githubApi.isOrg(name: src, client: app.client)
+            /// yml的内容
+            let ymlContent = actionContent(src: src,
+                                               dst: orgName,
+                                               isOrg: isOrg,
+                                               repo: name,
+                                               mirror: name)
+            app.logger.info("创建\(ymlFile)文件")
+            guard try await githubApi.addGithubAction(fileName: ymlFile,
+                                                      content: ymlContent,
+                                                      client: app.client) else {
+                throw Abort(.custom(code: 10000, reasonPhrase: "创建\(ymlFile)文件失败"))
+            }
+        }
+        mirror.isExit = false
+        mirror.lastMittorDate = Date().timeIntervalSince1970
+        try await mirror.update(on: app.db)
     }
 }
 

@@ -84,3 +84,18 @@ func getYmlFilePath(url:String) throws -> String {
     return ymlFile
 }
 
+
+extension ClientResponse {
+    func printLog(excludeCodes:[UInt]) {
+        print(self.status.code)
+        guard let body = self.body, !excludeCodes.contains(self.status.code) else {
+            return
+        }
+        let content = String(buffer: body)
+        print(content)
+    }
+    
+    func printError() {
+        printLog(excludeCodes: [200])
+    }
+}

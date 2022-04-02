@@ -40,10 +40,7 @@ struct GithubApi {
                 "content": try content.encodeBase64String()
             ], as: .json)
         })
-        if let body = response.body {
-            print(String(buffer: body))
-        }
-        print(response.status.code)
+        response.printError()
         return response.status.code == 201
     }
     
@@ -52,13 +49,17 @@ struct GithubApi {
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
         })
+        response.printError()
         let userInfo = try response.content.decode(GithubUserInfo.self)
         return userInfo.type == "Organization"
     }
     
     func ymlExit(file:String, in client:Client) async throws -> Bool {
         let uri = URI(string: "https://api.github.com/repos/josercc/\(repo)/contents/\(file)")
-        let response = try await client.get(uri)
+        let response = try await client.get(uri, beforeSend: { request in
+            request.headers = headers
+        })
+        response.printError()
         return response.status.code == 200
     }
     
@@ -68,6 +69,7 @@ struct GithubApi {
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
         })
+        response.printError()
         let content = try response.content.decode(GetFileContentResponse.self)
         /// 删除文件
         let deleteResponse = try await client.delete(uri, beforeSend: { request in
@@ -77,6 +79,7 @@ struct GithubApi {
                 "message":"remove \(fileName)"
             ])
         })
+        deleteResponse.printError()
         if deleteResponse.status.code != 200, let body = deleteResponse.body {
             throw Abort(.custom(code: deleteResponse.status.code,
                                 reasonPhrase: String(buffer: body)))

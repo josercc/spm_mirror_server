@@ -22,6 +22,7 @@ class GiteeApi {
         let path = "/user/orgs?access_token=\(token)&page=1&per_page=100&admin=true"
         let uri = URI(string: host + path)
         let response = try await client.get(uri)
+        response.printError()
         return try response.content.decode([UserOrgModel].self)
     }
     
@@ -34,6 +35,7 @@ class GiteeApi {
                 "org":name
             ])
         })
+        response.printError()
         guard response.status.code == 200 else {
             throw Abort(.custom(code: 1000, reasonPhrase: "创建组织\(name)失败"))
         }
@@ -42,6 +44,7 @@ class GiteeApi {
     func checkRepoExit(url:String, in client:Client) async throws -> Bool {
         let uri = URI(string: url)
         let response = try await client.get(uri)
+        response.printError()
         return response.status.code == 200
     }
 }

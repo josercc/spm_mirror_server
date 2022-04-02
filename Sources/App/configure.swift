@@ -16,14 +16,15 @@ public func configure(_ app: Application) throws {
     ), as: .psql)
 
     
-    try app.routes.register(collection: try MirrorController())
+    try app.routes.register(collection: MirrorController())
     
     app.migrations.add(CreateMirror())
     app.migrations.add(CreateMirrorStack())
     app.migrations.add(CreateMirrorRequest())
+    app.migrations.add(UpdateMirror001())
     try app.autoMigrate().wait()
     
-    app.logger.logLevel = .debug
+    app.logger.logLevel = .info
     // register routes
     try routes(app)
 }

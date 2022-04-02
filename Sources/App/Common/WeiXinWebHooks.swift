@@ -24,14 +24,14 @@ struct WeiXinWebHooks {
     /// - Parameters:
     ///   - content: 发送内容
     ///   - client: 发送的链接终端
-    func sendContent(_ content:String, in client:Client) async {
-        do {
-            let _ = try await client.post(URI(string: url), beforeSend: { request in
+    func sendContent(_ content:String, in client:Client) {
+        Task {
+            let response = try await client.post(URI(string: url), beforeSend: { request in
                 let model:WeiXinWebHookContent = .init(msgType: "text", text: .init(content: content))
-                try request.content.encode(model, as: .json)
+                let data = try JSONEncoder().encode(model)
+                request.body = ByteBuffer(data: data)
             })
-        } catch(let e) {
-            print("企业微信发送信息失败:\(e.localizedDescription)")
+            response.printError()
         }
     }
 }
