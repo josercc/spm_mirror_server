@@ -14,6 +14,8 @@ struct CreateMirror: AsyncMigration {
             .id()
             .field("origin", .string)
             .field("mirror",.string)
+            .field("create", .double)
+            .field("is_exit", .bool)
             .create()
     }
     

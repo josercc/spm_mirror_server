@@ -19,6 +19,8 @@ public func configure(_ app: Application) throws {
     try app.routes.register(collection: try MirrorController())
     
     app.migrations.add(CreateMirror())
+    app.migrations.add(CreateMirrorStack())
+    app.migrations.add(CreateMirrorRequest())
     try app.autoMigrate().wait()
     
     app.logger.logLevel = .debug

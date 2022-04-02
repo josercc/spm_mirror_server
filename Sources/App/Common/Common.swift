@@ -37,7 +37,7 @@ func actionContent(src:String,
         # * is a special character in YAML so you have to quote this string
         # UTC 17:00 -> CST (China) 1:00, see https://datetime360.com/cn/utc-cst-china-time/
         - cron: '0 17 * * *'
-    name: Mirror GitHub Auto Queried Repos to Gitee
+    name: Mirror \(src)/\(repo) to Gitee \(dst)/\(mirror)
     jobs:
       run:
         name: Sync-GitHub-to-Gitee
@@ -68,3 +68,19 @@ extension Logger {
         }
     }
 }
+
+
+func getYmlFilePath(url:String) throws -> String {
+    /// 获取仓库的组织或者用户名称 比如 Vapor
+    guard let src = repoOriginPath(from: url) else {
+        throw Abort(.custom(code: 10000, reasonPhrase: "\(url)中获取组织或者用户失败"))
+    }
+    /// 获取仓库名称 比如 Vapor
+    guard let name = repoNamePath(from: url) else {
+        throw Abort(.custom(code: 10000, reasonPhrase: "\(url)中获取仓库名称失败"))
+    }
+    /// 生成对应的 Gtihub Action配置文件名称
+    let ymlFile = "sync-\(src)-\(name)" + ".yml"
+    return ymlFile
+}
+

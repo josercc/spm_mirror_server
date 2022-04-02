@@ -13,23 +13,21 @@ class GiteeApi {
     final let token:String
     init() throws {
         guard let token = Environment.get("GITEE_TOKEN") else {
-            throw Abort(.tokenNotExit)
+            throw Abort(.expectationFailed)
         }
         self.token = token
     }
 
-    func getUserOrg(req:Request) async throws -> [UserOrgModel] {
-        req.logger.debug("正在获取用户的组织信息")
+    func getUserOrg(client:Client) async throws -> [UserOrgModel] {
         let path = "/user/orgs?access_token=\(token)&page=1&per_page=100&admin=true"
         let uri = URI(string: host + path)
-        let response = try await req.client.get(uri)
+        let response = try await client.get(uri)
         return try response.content.decode([UserOrgModel].self)
     }
     
-    func createOrg(req:Request, name:String) async throws {
-        req.logger.debug("正在创建组织:\(name)")
+    func createOrg(client:Client, name:String) async throws {
         let path = host + "/users/organization"
-        let response = try await req.client.post(URI(string: path), beforeSend: { request in
+        let response = try await client.post(URI(string: path), beforeSend: { request in
             try request.content.encode([
                 "access_token":token,
                 "name":name,
@@ -37,8 +35,13 @@ class GiteeApi {
             ])
         })
         guard response.status.code == 200 else {
-            req.logger.debug("创建组织\(name)失败")
             throw Abort(.custom(code: 1000, reasonPhrase: "创建组织\(name)失败"))
         }
+    }
+    
+    func checkRepoExit(url:String, in client:Client) async throws -> Bool {
+        let uri = URI(string: url)
+        let response = try await client.get(uri)
+        return response.status.code == 200
     }
 }

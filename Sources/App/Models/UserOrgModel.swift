@@ -8,14 +8,5 @@
 import Foundation
 
 struct UserOrgModel: Codable {
-    let id: Int
-    let login: String
     let name: String
-    let url: String
-    let avatar_url: String
-    let repos_url: String
-    let events_url: String
-    let members_url: String
-    let description: String
-    let follow_count: Int
 }

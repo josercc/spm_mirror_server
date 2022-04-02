@@ -15,7 +15,7 @@ struct GithubApi {
     init() throws {
         guard let token = Environment.get("GITHUB_TOKEN") else {
             print("GITHUB_TOKEN 不存在")
-            throw Abort(.systemError)
+            throw Abort(.expectationFailed)
         }
         self.token = token
         self.userAgent = """
@@ -23,21 +23,17 @@ struct GithubApi {
         """
         guard let repo = Environment.get("GITHUB_REPO") else {
             print("GITHUB_REPO不存在")
-            throw Abort(.systemError)
+            throw Abort(.expectationFailed)
         }
         self.repo = repo
     }
     
     func addGithubAction(fileName:String,
                          content:String,
-                         req:Request) async throws -> Bool {
-        let url = "https://api.github.com/repos/josercc/\(repo)/contents/.github/workflows/\(fileName).yml";
+                         client:Client) async throws -> Bool {
+        let url = "https://api.github.com/repos/josercc/\(repo)/contents/.github/workflows/\(fileName)";
         let uri = URI(string: url)
-        req.logger.debug("正在创建\(fileName).yml文件")
-        let response = try await req.client.put(uri, beforeSend: { request in
-            var headers = HTTPHeaders()
-            headers.add(name: .authorization, value: "Bearer \(token)")
-            headers.add(name: .userAgent, value: userAgent)
+        let response = try await client.put(uri, beforeSend: { request in
             request.headers = headers
             try request.content.encode([
                 "message": "create \(fileName)",
@@ -51,17 +47,53 @@ struct GithubApi {
         return response.status.code == 201
     }
     
-    func isOrg(name:String, req:Request) async throws -> Bool {
+    func isOrg(name:String, client:Client) async throws -> Bool {
         let uri = URI(string: "https://api.github.com/users/\(name)")
-        req.logger.debug("正在查询\(name)组织信息")
-        let response = try await req.client.get(uri, beforeSend: { request in
-            var headers = HTTPHeaders()
-            headers.add(name: .userAgent,
-                        value: userAgent)
+        let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
         })
-        req.logger.debugResponse(response: response)
         let userInfo = try response.content.decode(GithubUserInfo.self)
         return userInfo.type == "Organization"
+    }
+    
+    func ymlExit(file:String, in client:Client) async throws -> Bool {
+        let uri = URI(string: "https://api.github.com/repos/josercc/\(repo)/contents/\(file)")
+        let response = try await client.get(uri)
+        return response.status.code == 200
+    }
+    
+    func deleteYml(fileName:String, in client:Client) async throws {
+        let uri = URI(string: "https://api.github.com/repos/josercc/\(repo)/contents/.github/workflows/\(fileName)")
+        /// 读取文件信息
+        let response = try await client.get(uri, beforeSend: { request in
+            request.headers = headers
+        })
+        let content = try response.content.decode(GetFileContentResponse.self)
+        /// 删除文件
+        let deleteResponse = try await client.delete(uri, beforeSend: { request in
+            request.headers = headers
+            try request.content.encode([
+                "sha": content.sha,
+                "message":"remove \(fileName)"
+            ])
+        })
+        if deleteResponse.status.code != 200, let body = deleteResponse.body {
+            throw Abort(.custom(code: deleteResponse.status.code,
+                                reasonPhrase: String(buffer: body)))
+        }
+    }
+    
+    var headers:HTTPHeaders {
+        var headers = HTTPHeaders()
+        headers.replaceOrAdd(name: .accept, value: " application/vnd.github.v3+json")
+        headers.add(name: .authorization, value: "Bearer \(token)")
+        headers.add(name: .userAgent, value: userAgent)
+        return headers
+    }
+}
+
+extension GithubApi {
+    struct GetFileContentResponse: Codable {
+        let sha:String
     }
 }
