@@ -8,11 +8,12 @@
 import Foundation
 import Vapor
 
-struct GithubApi {
+public struct GithubApi {
     let token:String
     let userAgent:String
     let repo:String
-    init() throws {
+    let app:Application
+    public init(app:Application) throws {
         guard let token = Environment.get("GITHUB_TOKEN") else {
             print("GITHUB_TOKEN 不存在")
             throw Abort(.expectationFailed)
@@ -26,6 +27,7 @@ struct GithubApi {
             throw Abort(.expectationFailed)
         }
         self.repo = repo
+        self.app = app
     }
     
     func addGithubAction(fileName:String,
@@ -40,7 +42,7 @@ struct GithubApi {
                 "content": try content.encodeBase64String()
             ], as: .json)
         })
-        response.printError()
+        try response.printError(app: app, uri: uri, codes: [201])
         return response.status.code == 201
     }
     
@@ -49,17 +51,17 @@ struct GithubApi {
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
         })
-        response.printError()
+        try response.printError(app: app, uri: uri)
         let userInfo = try response.content.decode(GithubUserInfo.self)
         return userInfo.type == "Organization"
     }
     
     func ymlExit(file:String, in client:Client) async throws -> Bool {
-        let uri = URI(string: "https://api.github.com/repos/josercc/\(repo)/contents/\(file)")
+        let uri = URI(string: "https://api.github.com/repos/josercc/\(repo)/contents/.github/workflows/\(file)")
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
         })
-        response.printError()
+        try response.printError(app: app, uri: uri, codes: [200,404])
         return response.status.code == 200
     }
     
@@ -69,7 +71,7 @@ struct GithubApi {
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
         })
-        response.printError()
+        try response.printError(app: app, uri: uri)
         let content = try response.content.decode(GetFileContentResponse.self)
         /// 删除文件
         let deleteResponse = try await client.delete(uri, beforeSend: { request in
@@ -79,11 +81,7 @@ struct GithubApi {
                 "message":"remove \(fileName)"
             ])
         })
-        deleteResponse.printError()
-        if deleteResponse.status.code != 200, let body = deleteResponse.body {
-            throw Abort(.custom(code: deleteResponse.status.code,
-                                reasonPhrase: String(buffer: body)))
-        }
+        try deleteResponse.printError(app: app, uri: uri)
     }
     
     var headers:HTTPHeaders {

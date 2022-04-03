@@ -86,16 +86,16 @@ func getYmlFilePath(url:String) throws -> String {
 
 
 extension ClientResponse {
-    func printLog(excludeCodes:[UInt]) {
-        print(self.status.code)
-        guard let body = self.body, !excludeCodes.contains(self.status.code) else {
-            return
+    func printError(app:Application, uri:URI, codes:[UInt] = [200]) throws {
+        guard let body = self.body else {
+            throw Abort(.expectationFailed)
         }
         let content = String(buffer: body)
-        print(content)
-    }
-    
-    func printError() {
-        printLog(excludeCodes: [200])
+        guard codes.contains(self.status.code) else {
+            app.logger.info("uri:\(uri)")
+            app.logger.info("code:\(self.status.code)")
+            app.logger.info("content:\(content)")
+            throw Abort(.custom(code: self.status.code, reasonPhrase: "\(uri):\(content)"))
+        }
     }
 }

@@ -22,9 +22,16 @@ public func configure(_ app: Application) throws {
     app.migrations.add(CreateMirrorStack())
     app.migrations.add(CreateMirrorRequest())
     app.migrations.add(UpdateMirror001())
+    app.migrations.add(UpdateMirror002())
     try app.autoMigrate().wait()
     
     app.logger.logLevel = .info
     // register routes
     try routes(app)
+    
+    
+    /// 开启自动任务
+    let autoMirrorJob = try AutoMirrorJob(app: app)
+    autoMirrorJob.start()
+
 }

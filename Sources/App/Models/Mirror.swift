@@ -34,6 +34,12 @@ final class Mirror: Model, Content {
     @OptionalField(key: "last_mirror_date")
     var lastMittorDate:TimeInterval?
     
+    @OptionalField(key: "need_update")
+    var needUpdate:Bool?
+    
+    @OptionalField(key: "wait_count")
+    var waitCount:Int?
+    
     init() {
         
     }
@@ -45,15 +51,7 @@ final class Mirror: Model, Content {
         self.isExit = false
         self.requestMirrorCount = 0
         self.lastMittorDate = Date().timeIntervalSince1970
-    }
-    
-    func needUpdate() -> Bool {
-        guard let requestMirrorCount = requestMirrorCount else {
-            return true
-        }
-        guard let lastMittorDate = lastMittorDate else {
-            return true
-        }
-        return requestMirrorCount > 1000 && Date().timeIntervalSince1970 > (lastMittorDate + 7 * 24 * 60 * 60)
+        self.needUpdate = false
+        self.waitCount = 0
     }
 }
