@@ -1,6 +1,7 @@
 import Fluent
 import FluentPostgresDriver
 import Vapor
+import QueuesRedisDriver
 
 // configures your application
 public func configure(_ app: Application) throws {
@@ -29,6 +30,9 @@ public func configure(_ app: Application) throws {
     // register routes
     try routes(app)
     
+    try app.queues.use(.redis(url: "redis://127.0.0.1:6379"))
+    
+    try app.queues.startInProcessJobs(on: .default)
     
     /// 开启自动任务
     let autoMirrorJob = try AutoMirrorJob(app: app)

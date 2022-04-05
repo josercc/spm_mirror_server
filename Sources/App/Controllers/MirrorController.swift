@@ -41,7 +41,7 @@ struct MirrorController: RouteCollection {
         let mirrorRequest = MirrorRequest(url: originUrl)
         try await mirrorRequest.save(on: req.db)
         /// 查询当前仓库是否存在镜像
-        if var mirror = try await Mirror.query(on: req.db).filter(\Mirror.$origin == originUrl).first() {
+        if let mirror = try await Mirror.query(on: req.db).filter(\Mirror.$origin == originUrl).first() {
             if var requestMirrorCount = mirror.requestMirrorCount {
                 requestMirrorCount += 1
                 mirror.requestMirrorCount = requestMirrorCount

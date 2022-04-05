@@ -36,6 +36,9 @@ public class AutoMirrorJob {
                     return
                 }
                 app.logger.info("可以进行自动任务，重新开始自动任务。")
+                let _ = try await app.threadPool.runIfActive(eventLoop: app.eventLoopGroup.next(), {
+                    sleep(10)
+                }).get()
                 start()
             } catch(let e) {
                 if let abort = e as? Abort {
@@ -49,6 +52,7 @@ public class AutoMirrorJob {
     func mirror() async throws {
         app.logger.info("查询是否有需要进行自动更新仓库")
         let date = Date().timeIntervalSinceReferenceDate - 7 * 24 * 60 * 60
+        /// 如果请求次数超过了1000 并且7天没有更新就需要更新
         let mirrors = try await Mirror.query(on: app.db).filter(\.$requestMirrorCount > 1000).filter(\.$lastMittorDate < date).all()
         for mirror in mirrors {
             mirror.needUpdate = true
@@ -64,7 +68,7 @@ public class AutoMirrorJob {
         app.logger.info("准备进行查询是否还有未完成镜像")
         while true {
             app.logger.info("查询镜像还有没有未完成镜像")
-            /// 查询还在制作镜像没有超时的任务
+            /// 查询还在制作镜像没有超时的任务 60次之后算超时自动跳过
             let waitingMirror = try await Mirror.query(on: app.db).filter(\.$isExit == false).filter(\.$waitCount <= 60).first()
             guard let waitingMirror = waitingMirror else {
                 app.logger.info("查询镜像的任务都已经完成了，退出开始新的镜像任务。")
@@ -144,7 +148,7 @@ public class AutoMirrorJob {
             app.logger.info("查询\(ymlFile)是否存在")
             let ymlExit = try await githubApi.ymlExit(file: ymlFile, in: app.client)
             if !ymlExit {
-                app.logger.info("\(ymlFile)已经存在")
+                app.logger.info("\(ymlFile)不存在")
                 app.logger.info("查询\(src)是否是组织")
                 let isOrg = try await githubApi.isOrg(name: src, client: app.client)
                 /// yml的内容
