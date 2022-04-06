@@ -13,12 +13,7 @@ public struct WeiXinWebHooks {
     /// 微信接收的 WebHook地址
     let url:String
     let app:Application
-    public init(app:Application) throws {
-        /// 从配置读取微信的 WebHook 地址
-        guard let url = Environment.get("WEIXIN_HOOK") else {
-            print("WEIXIN_HOOK 不存在")
-            throw Abort(.expectationFailed)
-        }
+    public init(app:Application, url:String) throws {
         self.url = url
         self.app = app
     }

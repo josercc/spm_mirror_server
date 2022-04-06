@@ -1,5 +1,5 @@
 //
-//  AutoMirrorJob.swift
+//  AutoMirrorManager.swift
 //  
 //
 //  Created by 张行 on 2022/4/1.
@@ -10,11 +10,11 @@ import Vapor
 import FluentKit
 
 /// 自动执行镜像的任务
-public class AutoMirrorJob {
-    let githubApi:GithubApi
-    let giteeApi:GiteeApi
-    let app:Application
-    let wxHook:WeiXinWebHooks
+public class AutoMirrorManager {
+    public let githubApi:GithubApi
+    public let giteeApi:GiteeApi
+    public let app:Application
+    public let wxHook:WeiXinWebHooks
     public init(app:Application) throws {
         giteeApi = try GiteeApi(app: app)
         githubApi = try GithubApi(app: app)

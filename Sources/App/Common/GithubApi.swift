@@ -13,19 +13,11 @@ public struct GithubApi {
     let userAgent:String
     let repo:String
     let app:Application
-    public init(app:Application) throws {
-        guard let token = Environment.get("GITHUB_TOKEN") else {
-            print("GITHUB_TOKEN 不存在")
-            throw Abort(.expectationFailed)
-        }
+    public init(app:Application, token:String, repo:String) throws {
         self.token = token
         self.userAgent = """
         Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15
         """
-        guard let repo = Environment.get("GITHUB_REPO") else {
-            print("GITHUB_REPO不存在")
-            throw Abort(.expectationFailed)
-        }
         self.repo = repo
         self.app = app
     }

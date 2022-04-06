@@ -12,11 +12,7 @@ public class GiteeApi {
     final let host = "https://gitee.com/api/v5"
     final let token:String
     let app:Application
-    public init(app:Application) throws {
-        guard let token = Environment.get("GITEE_TOKEN") else {
-            print("GITEE_TOKEN 不存在")
-            throw Abort(.expectationFailed)
-        }
+    public init(app:Application, token:String) throws {
         self.token = token
         self.app = app
     }

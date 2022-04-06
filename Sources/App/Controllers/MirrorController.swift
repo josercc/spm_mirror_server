@@ -57,7 +57,7 @@ struct MirrorController: RouteCollection {
             let stack = MirrorStack(url: originUrl)
             try await stack.save(on: req.db)
             /// 开始进行自动任务
-            let autoMirror = try AutoMirrorJob(app: req.application)
+            let autoMirror = try AutoMirrorManager(app: req.application)
             autoMirror.start()
             /// 通知用户前面还有多人需要排队
             return .init(failure: 10000, message: "\(originUrl)镜像正在排队制作中，前面还有\(count)个仓库正在排队")
