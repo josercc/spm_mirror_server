@@ -34,8 +34,8 @@ public func configure(_ app: Application) throws {
     
     try app.queues.startInProcessJobs(on: .default)
     
-    /// 开启自动任务
-    let autoMirrorJob = try AutoMirrorManager(app: app)
-    autoMirrorJob.start()
+    // /// 开启自动任务
+    // let autoMirrorJob = try AutoMirrorManager(app: app)
+    // autoMirrorJob.start()
 
 }
