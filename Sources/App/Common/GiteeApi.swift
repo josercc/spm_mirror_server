@@ -45,6 +45,13 @@ public class GiteeApi {
         try response.printError(app: app, uri: uri)
         return repos.count > 0
     }
+
+    /// 检查组织是否存在
+    func checkOrgExit(org:String, in client:Client) async throws -> Bool {
+        /// 获取所有组织
+        let orgs = try await getUserOrg(client: client)
+        return orgs.contains(where: { $0.name == org })
+    }
 }
 
 struct Repo: Codable {
