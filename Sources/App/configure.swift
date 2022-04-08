@@ -17,6 +17,8 @@ public func configure(_ app: Application) throws {
     ), as: .psql)
 
     
+    
+
     try app.routes.register(collection: MirrorController())
     
     app.migrations.add(CreateMirror())
@@ -29,8 +31,9 @@ public func configure(_ app: Application) throws {
     app.logger.logLevel = .info
     // register routes
     try routes(app)
-    
-    try app.queues.use(.redis(url: "redis://localhost:6379"))
+    let redisHost = Environment.get("REDIS_HOST") ?? "127.0.0.1"
+    app.redis.configuration = try RedisConfiguration(hostname: redisHost)
+    try app.queues.use(.redis(url: "redis://\(redisHost):6379"))
     app.queues.add(MirrorJob())
     app.queues.add(StartMirrorJob())
     app.queues.add(UpdateMirrorJob())

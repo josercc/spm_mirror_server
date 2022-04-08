@@ -9,8 +9,8 @@ import Foundation
 import ConsoleKit
 import Vapor
 
-func repoPath(from url:String) -> String {
-    return url.replacingOccurrences(of: "https://github.com/", with: "")
+func repoPath(from url:String, host:String = "https://github.com/") -> String {
+    return url.replacingOccurrences(of: host, with: "")
         .replacingOccurrences(of: ".git", with: "")
 }
 

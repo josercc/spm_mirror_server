@@ -39,11 +39,13 @@ public class GiteeApi {
     }
     
     func checkRepoExit(repo:String, in client:Client) async throws -> Bool {
-        let uri = URI(string: "https://gitee.com/api/v5/search/repositories?access_token=\(token)&q=\(repo)")
-        let response = try await client.get(uri)
-        let repos = try response.content.decode([Repo].self)
-        try response.printError(app: app, uri: uri)
-        return repos.count > 0
+//        let uri = URI(string: "https://gitee.com/api/v5/search/repositories?access_token=\(token)&q=\(repo)")
+//        let response = try await client.get(uri)
+//        try response.printError(app: app, uri: uri)
+//        let repos = try response.content.decode([Repo].self)
+//        return repos.count > 0
+        let uri = URI(string: "https://gitee.com/\(repo)/raw/main/Package.swift")
+        /// 获取 Package的内容 如果存在就代表仓库
     }
 
     /// 检查组织是否存在

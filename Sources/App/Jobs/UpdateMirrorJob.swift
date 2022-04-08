@@ -65,9 +65,11 @@ struct UpdateMirrorJob: MirrorAsyncJob {
         }).get()
         /// 删除 YML 文件
         try await githubApi.deleteYml(fileName: ymlFilePath, in: context.application.client)
-        mirror.needUpdate = false
-        /// 更新到数据库
-        try await mirror.update(on: context.application.db)
+        if let mirror = try await Mirror.find(payload.mirror.id, on: context.application.db) {
+            mirror.needUpdate = false
+            /// 更新到数据库
+            try await mirror.update(on: context.application.db)
+        }
         /// 延时5秒开启新任务
         let _ = try await context.application.threadPool.runIfActive(eventLoop: context.application.eventLoopGroup.next(), {
             sleep(5)

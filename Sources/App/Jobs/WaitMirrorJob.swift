@@ -8,7 +8,7 @@ struct WaitMirrorJob: MirrorAsyncJob {
         /// 获取数据库的镜像数据
         let mirror = payload.mirror
         /// 获取镜像是否制作完毕 制作完成则开启新的任务
-        guard mirror.isExit else {
+        guard !mirror.isExit else {
             let payload = MirrorJob.PayloadData(config: payload.config)
             /// 延时5秒开启新任务
             let _ = try await context.application.threadPool.runIfActive(eventLoop: context.eventLoop, {
@@ -19,8 +19,10 @@ struct WaitMirrorJob: MirrorAsyncJob {
         }
         /// 创建 GiteeApi
         let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
+        /// 获取仓库地址
+        let repoPath = repoPath(from: mirror.mirror, host: "https://gitee.com/")
         /// 查询镜像仓库是否存在
-        let repoExit = try await giteeApi.checkRepoExit(repo: mirror.mirror, in: context.application.client)
+        let repoExit = try await giteeApi.checkRepoExit(repo: repoPath, in: context.application.client)
         /// 如果镜像仓库不存在开启新的 MirrorJob
         if !repoExit {
             let payload = MirrorJob.PayloadData(config: payload.config)
@@ -50,10 +52,12 @@ struct WaitMirrorJob: MirrorAsyncJob {
         if ymlExit {
             try await githubApi.deleteYml(fileName: ymlPath, in: context.application.client)
         }
-        /// 更新数据库是否存在的状态
-        mirror.isExit = true
-        /// 更新数据库
-        try await mirror.update(on: context.application.db)
+        if let mirror = try await Mirror.find(mirror.id, on: context.application.db) {
+            /// 更新数据库是否存在的状态
+            mirror.isExit = true
+            /// 更新数据库
+            try await mirror.update(on: context.application.db)
+        }
         /// 延时 5 秒开启新任务
         let _ = try await context.application.threadPool.runIfActive(eventLoop: context.eventLoop, {
             sleep(5)

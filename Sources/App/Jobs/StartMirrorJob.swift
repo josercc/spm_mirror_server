@@ -33,13 +33,6 @@ struct StartMirrorJob: MirrorAsyncJob {
         }
         /// 获取镜像仓库地址
         let mirrorRepo = "https://gitee.com/\(mirrorOrg)/\(repo)"
-        /// 如果是覆盖 数据库数据如果对应地址没有其他仓库占用则进行覆盖重写
-        // /// 判断镜像仓库是否存在
-        // let exists = try await giteeApi.checkRepoExit(repo: mirrorRepo, in: context.application.client)
-        // /// 如果镜像存在则退出
-        // if exists {
-        //     return
-        // }
         /// 查询组织是否存在
         let orgExists = try await giteeApi.checkOrgExit(org: mirrorOrg, in: context.application.client)
         /// 如果组织不存在则创建组织
@@ -69,10 +62,22 @@ struct StartMirrorJob: MirrorAsyncJob {
         let ymlFile = try getYmlFilePath(url: mirror)
         /// 检测YML 文件是否存在
         let ymlExists = try await githubApi.ymlExit(file: ymlFile, in: context.application.client)
+        /// 获取是否有对应的Run运行
+        let runStatus = try await githubApi.fetchRunStatus(repo: "\(mirrorOrg)/\(repo)", in: context.application.client)
+        if runStatus == .success {
+            /// 如果之前就已经是成功状态 删除排队
+            if let mirrorStack = try await MirrorStack.find(payload.mirrorStack.id, on: context.application.db) {
+                /// 删除排队队列
+                try await mirrorStack.delete(on: context.application.db)
+            }
+            
+        }
         /// 如果YML文件存在就删除数据库排队队列退出
         if ymlExists {
-            /// 删除排队队列
-            try await payload.mirrorStack.delete(on: context.application.db)
+            if let mirrorStack = try await MirrorStack.find(payload.mirrorStack.id, on: context.application.db) {
+                /// 删除排队队列
+                try await mirrorStack.delete(on: context.application.db)
+            }
         }
         /// 创建YML文件
         let createSuccess = try await githubApi.addGithubAction(fileName: ymlFile, content: actionContent, client: context.application.client)
@@ -87,7 +92,10 @@ struct StartMirrorJob: MirrorAsyncJob {
         /// 删除 YML文件
         try await githubApi.deleteYml(fileName:ymlFile, in: context.application.client)
         /// 删除排队队列
-        try await payload.mirrorStack.delete(on: context.application.db)
+        if let mirrorStack = try await MirrorStack.find(payload.mirrorStack.id, on: context.application.db) {
+            /// 删除排队队列
+            try await mirrorStack.delete(on: context.application.db)
+        }
         /// 保存新的镜像
         let mirrorData = Mirror(origin: mirror, mirror: mirrorRepo)
         try await mirrorData.save(on: context.application.db)
