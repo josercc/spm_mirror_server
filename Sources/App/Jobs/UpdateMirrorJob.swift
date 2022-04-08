@@ -10,13 +10,14 @@ import Queues
 import Vapor
 
 /// 更新镜像的操作
-struct UpdateMirrorRepoJob: AsyncJob {
+struct UpdateMirrorJob: MirrorAsyncJob {
     typealias Payload = PayloadData
     func dequeue(_ context: QueueContext, _ payload: PayloadData) async throws {
+        context.logger.info("UpdateMirrorJob: \(payload.mirror.origin) \(payload.mirror.mirror) \(String(describing: payload.mirror.id))")
         /// 获取需要更新的仓库
         let mirror = payload.mirror
         /// 获取是否需要升级 不需要升级则退出
-        guard let needUpdate = mirror.needUpdate, needUpdate else {
+        guard mirror.needUpdate else {
             return
         }
         /// 获取原仓库地址
@@ -64,22 +65,29 @@ struct UpdateMirrorRepoJob: AsyncJob {
         }).get()
         /// 删除 YML 文件
         try await githubApi.deleteYml(fileName: ymlFilePath, in: context.application.client)
-        /// 更新Mirror 最后更新日期
-        mirror.lastMittorDate = Date().timeIntervalSinceReferenceDate
+        mirror.needUpdate = false
         /// 更新到数据库
         try await mirror.update(on: context.application.db)
+        /// 延时5秒开启新任务
+        let _ = try await context.application.threadPool.runIfActive(eventLoop: context.application.eventLoopGroup.next(), {
+            sleep(5)
+        }).get()
+        /// 创建新任务
+        let newJob = MirrorJob.PayloadData(config: payload.config)
+        /// 开启任务
+        try await context.queue.dispatch(MirrorJob.self, newJob)
     }
     
     func error(_ context: QueueContext, _ error: Error, _ payload: PayloadData) async throws {
         let message = "\(payload.mirror) \(error.localizedDescription)"
-        let wxApi = try WeiXinWebHooks(app: context.application, url: payload.config.wxHookUrl)
+        let wxApi = WeiXinWebHooks(app: context.application, url: payload.config.wxHookUrl)
         wxApi.sendContent(message, in: context.application.client)
     }
 }
 
 
-extension UpdateMirrorRepoJob {
-    struct PayloadData: Codable {
+extension UpdateMirrorJob {
+    struct PayloadData: JobPayload {
         let config:MirrorConfigration
         let mirror:Mirror
     }

@@ -13,11 +13,6 @@ struct UpdateMirror002: AsyncMigration {
         try await database.schema(Mirror.schema)
             .field("wait_count", .int)
             .update()
-        let mirrors = try await Mirror.query(on: database).all()
-        for mirror in mirrors {
-            mirror.waitCount = 0
-            try await mirror.update(on: database)
-        }
     }
     
     func revert(on database: Database) async throws {

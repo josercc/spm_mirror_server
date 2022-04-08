@@ -4,6 +4,7 @@ import Vapor
 struct WaitMirrorJob: MirrorAsyncJob {
     typealias Payload = PayloadData
     func dequeue(_ context: QueueContext, _ payload: Payload) async throws {
+        context.logger.info("WaitMirrorJob: \(String(describing: payload.mirror.id)) \(String(describing: payload.mirror.mirror)) \(String(describing: payload.mirror.origin))")
         /// 获取数据库的镜像数据
         let mirror = payload.mirror
         /// 获取镜像是否制作完毕 制作完成则开启新的任务
@@ -27,6 +28,15 @@ struct WaitMirrorJob: MirrorAsyncJob {
             let _ = try await context.application.threadPool.runIfActive(eventLoop: context.eventLoop, {
                 sleep(30)
             }).get()
+            mirror.waitCount += 1
+            /// 如果重试次数大于60则发送错误到微信
+            if mirror.waitCount > 60 {
+                let weiXin = WeiXinWebHooks(app: context.application, url: payload.config.wxHookUrl)
+                let content = "镜像仓库: \(mirror.mirror) 制作失败"
+                weiXin.sendContent(content, in: context.application.client)
+            }
+            /// 更新数据库
+            try await mirror.update(on: context.application.db)
             try await context.application.queues.queue.dispatch(MirrorJob.self, payload)
             return
         }
@@ -44,9 +54,9 @@ struct WaitMirrorJob: MirrorAsyncJob {
         mirror.isExit = true
         /// 更新数据库
         try await mirror.update(on: context.application.db)
-        /// 延时 30 秒开启新任务
+        /// 延时 5 秒开启新任务
         let _ = try await context.application.threadPool.runIfActive(eventLoop: context.eventLoop, {
-            sleep(30)
+            sleep(5)
         }).get()
         let payload = MirrorJob.PayloadData(config: payload.config)
         try await context.application.queues.queue.dispatch(MirrorJob.self, payload)

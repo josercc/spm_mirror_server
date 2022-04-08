@@ -28,6 +28,9 @@ struct MirrorController: RouteCollection {
                 return .init(failure: 10000, message: e.localizedDescription)
             }
         }
+
+        let job = routes.grouped("job")
+        job.get(use: openMirrorJob)
     }
     /// 获取仓库的镜像
     func getMirror(req:Request) async throws -> ResponseModel<String> {
@@ -42,11 +45,8 @@ struct MirrorController: RouteCollection {
         try await mirrorRequest.save(on: req.db)
         /// 查询当前仓库是否存在镜像
         if let mirror = try await Mirror.query(on: req.db).filter(\Mirror.$origin == originUrl).first() {
-            if var requestMirrorCount = mirror.requestMirrorCount {
-                requestMirrorCount += 1
-                mirror.requestMirrorCount = requestMirrorCount
-                try await mirror.update(on: req.db)
-            }
+            mirror.requestMirrorCount += 1
+            try await mirror.update(on: req.db)
             return .init(success: mirror.mirror)
         }
         /// 如果仓库还没有制作镜像 则查询制作镜像队列
@@ -56,10 +56,7 @@ struct MirrorController: RouteCollection {
             /// 将新的制作添加到队列
             let stack = MirrorStack(url: originUrl)
             try await stack.save(on: req.db)
-            /// 开始进行自动任务
-            // let autoMirror = try AutoMirrorManager(app: req.application)
-            // autoMirror.start()
-            /// 通知用户前面还有多人需要排队
+            let _ = try await openMirrorJob(req: req)
             return .init(failure: 10000, message: "\(originUrl)镜像正在排队制作中，前面还有\(count)个仓库正在排队")
         }
         /// 查询当前仓库已经在队列里面 查询前面还有多少仓库在排队
@@ -70,5 +67,29 @@ struct MirrorController: RouteCollection {
     func getList(req:Request) async throws -> ResponseModel<[Mirror]> {
         let paginate = try await Mirror.query(on: req.db).paginate(for: req)
         return .init(success: paginate.items, page: paginate.metadata)
+    }
+
+    func openMirrorJob(req:Request) async throws -> ResponseModel<String> {
+        let isRunning = await mirrorJobStatus.isRunning
+        guard !isRunning else {
+            return .init(failure: 10000, message: "当前存在运行的镜像任务 打开新的镜像任务失败！")
+        }
+        Task {
+                /// 创建配置文件
+                let config = try MirrorConfigration()
+                await mirrorJobStatus.start()
+                do {
+
+                /// 开启新的任务
+                let job = MirrorJob.PayloadData(config: config)
+                /// 开启任务
+                try await req.queue.dispatch(MirrorJob.self, job)
+                } catch(let e) {
+                    let hook  = WeiXinWebHooks(app: req.application, url: config.wxHookUrl)
+                    hook.sendContent(e.localizedDescription, in: req.client)
+                }
+                await mirrorJobStatus.stop()
+            }
+        return .init(success: "开启任务成功")
     }
 }

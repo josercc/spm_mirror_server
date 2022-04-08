@@ -15,13 +15,6 @@ struct UpdateMirror001: AsyncMigration {
             .field("last_mirror_date", .double)
             .field("need_update", .bool)
             .update()
-        let mirrors = try await Mirror.query(on: database).all()
-        for mirror in mirrors {
-            mirror.lastMittorDate = Date().timeIntervalSince1970
-            mirror.requestMirrorCount = 0
-            mirror.needUpdate = false
-            try await mirror.update(on: database)
-        }
     }
     
     func revert(on database: Database) async throws {

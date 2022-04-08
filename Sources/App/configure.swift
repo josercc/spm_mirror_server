@@ -30,12 +30,38 @@ public func configure(_ app: Application) throws {
     // register routes
     try routes(app)
     
-    try app.queues.use(.redis(url: "redis://127.0.0.1:6379"))
-    
+    try app.queues.use(.redis(url: "redis://localhost:6379"))
+    app.queues.add(MirrorJob())
+    app.queues.add(StartMirrorJob())
+    app.queues.add(UpdateMirrorJob())
+    app.queues.add(WaitMirrorJob())
     try app.queues.startInProcessJobs(on: .default)
-    
-    // /// 开启自动任务
-    // let autoMirrorJob = try AutoMirrorManager(app: app)
-    // autoMirrorJob.start()
 
+    /// 每天下午12点开启任务
+    app.queues.schedule(TimeJob())
+    .daily()
+    .at(.noon)
+    /// 获取配置文件 MirrorConfigration
+    let config = try MirrorConfigration()
+    /// 开启镜像任务
+    let job = MirrorJob.PayloadData(config: config)
+    /// 开启任务
+    Task {
+        let isRunning = await mirrorJobStatus.isRunning
+        guard !isRunning else {
+            app.logger.info("当前存在其他镜像任务，启动镜像任务失败")
+            return
+        }
+        await mirrorJobStatus.start()
+        do {
+            try await app.queues.queue.dispatch(MirrorJob.self, job)
+        } catch (let e) {
+            /// 创建weixin Hook
+            let hook = WeiXinWebHooks(app: app, url: config.wxHookUrl)
+            hook.sendContent(e.localizedDescription, in: app.client)
+        }
+        await mirrorJobStatus.stop()
+    }
 }
+
+

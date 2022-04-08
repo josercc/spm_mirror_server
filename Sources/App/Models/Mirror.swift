@@ -28,17 +28,17 @@ final class Mirror: Model, Content {
     @Field(key: "is_exit")
     var isExit:Bool
     
-    @OptionalField(key: "request_mirror_count")
-    var requestMirrorCount:Int?
+    @Field(key: "request_mirror_count")
+    var requestMirrorCount:Int
     
-    @OptionalField(key: "last_mirror_date")
-    var lastMittorDate:TimeInterval?
+    @Field(key: "last_mirror_date")
+    var lastMittorDate:TimeInterval
     
-    @OptionalField(key: "need_update")
-    var needUpdate:Bool?
+    @Field(key: "need_update")
+    var needUpdate:Bool
     
-    @OptionalField(key: "wait_count")
-    var waitCount:Int?
+    @Field(key: "wait_count")
+    var waitCount:Int
     
     init() {
         
@@ -55,3 +55,4 @@ final class Mirror: Model, Content {
         self.waitCount = 0
     }
 }
+
