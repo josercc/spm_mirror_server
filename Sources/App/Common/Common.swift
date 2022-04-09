@@ -14,12 +14,12 @@ func repoPath(from url:String, host:String = "https://github.com/") -> String {
         .replacingOccurrences(of: ".git", with: "")
 }
 
-func repoOriginPath(from url:String) -> String? {
-    return repoPath(from: url).components(separatedBy: "/").first
+func repoOriginPath(from url:String, host:String = "https://github.com/") -> String? {
+    return repoPath(from: url, host: host).components(separatedBy: "/").first
 }
 
-func repoNamePath(from url:String) -> String? {
-    return repoPath(from: url).components(separatedBy: "/").last
+func repoNamePath(from url:String, host:String = "https://github.com/") -> String? {
+    return repoPath(from: url, host: host).components(separatedBy: "/").last
 }
 
 func actionContent(src:String,

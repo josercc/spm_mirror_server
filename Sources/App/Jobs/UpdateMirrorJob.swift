@@ -27,13 +27,14 @@ struct UpdateMirrorJob: MirrorAsyncJob {
             throw Abort(.expectationFailed)
         }
         /// 获取镜像之后的组织
-        guard let dst = repoOriginPath(from: mirror.mirror) else {
+        guard let dst = repoOriginPath(from: mirror.mirror, host: "https://gitee.com/") else {
             throw Abort(.expectationFailed)
         }
+        context.logger.info("UpdateMirrorJob: \(src) \(dst)");
         /// 获取GiteeApi
         let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
         // /// 查询组织是否存在
-        let exists = try await giteeApi.checkRepoExit(repo: dst, in: context.application.client)
+        let exists = try await giteeApi.checkOrgExit(org: dst, in: context.application.client)
         // /// 如果不存在则创建
         if !exists {
             try await giteeApi.createOrg(client: context.application.client, name: dst)
@@ -49,26 +50,16 @@ struct UpdateMirrorJob: MirrorAsyncJob {
         /// 获取之前仓库是否是组织
         let isOrg = try await githubApi.isOrg(name: src, client: context.application.client)
         /// Github 新增Action内容
-        let ymlContent = actionContent(src: src, dst: dst, isOrg: isOrg, repo: repo, mirror: mirror.mirror)
+        let ymlContent = actionContent(src: src, dst: dst, isOrg: isOrg, repo: repo, mirror: dst)
         /// 检测 YML 是否存在
         let ymlExit = try await githubApi.ymlExit(file: ymlFilePath, in: context.application.client)
-        /// 如果不存在则添加YML
-        if !ymlExit {
-            /// 如果创建 YML 文件失败则退出
-            guard try await githubApi.addGithubAction(fileName: ymlFilePath, content: ymlContent, client: context.application.client) else {
-                throw Abort(.custom(code: 10000, reasonPhrase: "创建\(ymlFilePath)失败"))
-            }
+        /// 如果存在则删除YML
+        if ymlExit {
+            try await githubApi.deleteYml(fileName: ymlFilePath, in: context.application.client) 
         }
-        /// 30秒后删除 启动任务之后不久就删除 因为无法继续判断任务是否执行完成
-        let _ = try await context.application.threadPool.runIfActive(eventLoop: context.application.eventLoopGroup.next(), {
-            sleep(30)
-        }).get()
-        /// 删除 YML 文件
-        try await githubApi.deleteYml(fileName: ymlFilePath, in: context.application.client)
-        if let mirror = try await Mirror.find(payload.mirror.id, on: context.application.db) {
-            mirror.needUpdate = false
-            /// 更新到数据库
-            try await mirror.update(on: context.application.db)
+        /// 如果创建 YML 文件失败则退出
+        guard try await githubApi.addGithubAction(fileName: ymlFilePath, content: ymlContent, client: context.application.client) else {
+            throw Abort(.custom(code: 10000, reasonPhrase: "创建\(ymlFilePath)失败"))
         }
         /// 延时5秒开启新任务
         let _ = try await context.application.threadPool.runIfActive(eventLoop: context.application.eventLoopGroup.next(), {

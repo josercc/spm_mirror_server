@@ -8,7 +8,7 @@ struct WaitMirrorJob: MirrorAsyncJob {
         /// 获取数据库的镜像数据
         let mirror = payload.mirror
         /// 获取镜像是否制作完毕 制作完成则开启新的任务
-        guard !mirror.isExit else {
+        if mirror.isExit {
             let payload = MirrorJob.PayloadData(config: payload.config)
             /// 延时5秒开启新任务
             let _ = try await context.application.threadPool.runIfActive(eventLoop: context.eventLoop, {
@@ -17,46 +17,41 @@ struct WaitMirrorJob: MirrorAsyncJob {
             try await context.application.queues.queue.dispatch(MirrorJob.self, payload)
             return
         }
-        /// 创建 GiteeApi
-        let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
-        /// 获取仓库地址
+        /// 创建 Github Api
+        let githubApi = try GithubApi(app: context.application, token: payload.config.githubToken, repo: payload.config.githubRepo)
         let repoPath = repoPath(from: mirror.mirror, host: "https://gitee.com/")
-        /// 查询镜像仓库是否存在
-        let repoExit = try await giteeApi.checkRepoExit(repo: repoPath, in: context.application.client)
-        /// 如果镜像仓库不存在开启新的 MirrorJob
-        if !repoExit {
-            let payload = MirrorJob.PayloadData(config: payload.config)
-            /// 延时 30 秒开启新任务
+        /// 获取是否有制作镜像的Run状态
+        let runStatus = try await githubApi.fetchRunStatus(repo: repoPath, in: context.application.client)
+        if runStatus == .success {
+            /// 开始成功的任务
+            let payload = RunSuccessJob.PayloadData(config: payload.config, origin: mirror.origin)
+            try await context.queue.dispatch(RunSuccessJob.self, payload)
+            return
+        }
+        /// 如果处于等待和制作中 则等待30秒开始新的任务
+        if runStatus == .queued || runStatus == .inProgress {
             let _ = try await context.application.threadPool.runIfActive(eventLoop: context.eventLoop, {
                 sleep(30)
             }).get()
-            mirror.waitCount += 1
-            /// 如果重试次数大于60则发送错误到微信
-            if mirror.waitCount > 60 {
-                let weiXin = WeiXinWebHooks(app: context.application, url: payload.config.wxHookUrl)
-                let content = "镜像仓库: \(mirror.mirror) 制作失败"
-                weiXin.sendContent(content, in: context.application.client)
-            }
-            /// 更新数据库
-            try await mirror.update(on: context.application.db)
-            try await context.application.queues.queue.dispatch(MirrorJob.self, payload)
+            let payload = WaitMirrorJob.PayloadData(config: payload.config, mirror: mirror)
+            try await context.queue.dispatch(WaitMirrorJob.self, payload)
             return
+        }
+        /// 如果处于失败状态 则增加等待次数
+        if runStatus == .failure, let mirror = try await Mirror.find(payload.mirror.id, on: context.application.db) {
+            /// 增加等待次数
+            mirror.waitCount += 1
+            /// 更新镜像数据
+            try await mirror.update(on: context.application.db)
         }
         /// 获取YML文件路径
         let ymlPath = try getYmlFilePath(url: mirror.origin)
         /// 创建 Github api
-        let githubApi = try GithubApi(app: context.application, token: payload.config.githubToken, repo: payload.config.githubRepo)
         /// 查询YML文件是否存在
         let ymlExit = try await githubApi.ymlExit(file: ymlPath, in: context.application.client)
         /// 如果 YML存在就删除 YML文件
         if ymlExit {
             try await githubApi.deleteYml(fileName: ymlPath, in: context.application.client)
-        }
-        if let mirror = try await Mirror.find(mirror.id, on: context.application.db) {
-            /// 更新数据库是否存在的状态
-            mirror.isExit = true
-            /// 更新数据库
-            try await mirror.update(on: context.application.db)
         }
         /// 延时 5 秒开启新任务
         let _ = try await context.application.threadPool.runIfActive(eventLoop: context.eventLoop, {

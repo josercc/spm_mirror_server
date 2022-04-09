@@ -62,39 +62,16 @@ struct StartMirrorJob: MirrorAsyncJob {
         let ymlFile = try getYmlFilePath(url: mirror)
         /// 检测YML 文件是否存在
         let ymlExists = try await githubApi.ymlExit(file: ymlFile, in: context.application.client)
-        /// 获取是否有对应的Run运行
-        let runStatus = try await githubApi.fetchRunStatus(repo: "\(mirrorOrg)/\(repo)", in: context.application.client)
-        if runStatus == .success {
-            /// 如果之前就已经是成功状态 删除排队
-            if let mirrorStack = try await MirrorStack.find(payload.mirrorStack.id, on: context.application.db) {
-                /// 删除排队队列
-                try await mirrorStack.delete(on: context.application.db)
-            }
-            
-        }
         /// 如果YML文件存在就删除数据库排队队列退出
         if ymlExists {
-            if let mirrorStack = try await MirrorStack.find(payload.mirrorStack.id, on: context.application.db) {
-                /// 删除排队队列
-                try await mirrorStack.delete(on: context.application.db)
-            }
+            /// 删除 YML 文件
+            try await githubApi.deleteYml(fileName: ymlFile, in: context.application.client)
         }
         /// 创建YML文件
         let createSuccess = try await githubApi.addGithubAction(fileName: ymlFile, content: actionContent, client: context.application.client)
         /// 如果创建失败则退出
         if !createSuccess {
             throw Abort(.custom(code: 10000, reasonPhrase: "创建\(ymlFile)失败"))
-        }
-        /// 延时2分钟删除YML文件
-        let _ = try await context.application.threadPool.runIfActive(eventLoop: context.application.eventLoopGroup.next(), {
-            sleep(2 * 60)
-        }).get()
-        /// 删除 YML文件
-        try await githubApi.deleteYml(fileName:ymlFile, in: context.application.client)
-        /// 删除排队队列
-        if let mirrorStack = try await MirrorStack.find(payload.mirrorStack.id, on: context.application.db) {
-            /// 删除排队队列
-            try await mirrorStack.delete(on: context.application.db)
         }
         /// 保存新的镜像
         let mirrorData = Mirror(origin: mirror, mirror: mirrorRepo)

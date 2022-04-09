@@ -14,7 +14,7 @@ public struct MirrorConfigration: Codable {
     public let githubRepo:String
     public let wxHookUrl:String
     
-    init() throws {
+    public init() throws {
         guard let giteeToken = Environment.get("GITEE_TOKEN") else {
             print("GITEE_TOKEN 不存在")
             throw Abort(.expectationFailed)

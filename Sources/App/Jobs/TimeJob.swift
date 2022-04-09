@@ -8,8 +8,8 @@ struct TimeJob: AsyncScheduledJob {
         }
         await mirrorJobStatus.start()
        /// 开启任务
-       let configration = try MirrorConfigration()
-       let job = MirrorJob.PayloadData(config: configration)
+        let configration = try MirrorConfigration()
+        let job = MirrorJob.PayloadData(config: configration)
         try await context.application.queues.queue.dispatch(MirrorJob.self, job)
         await mirrorJobStatus.stop()
     }

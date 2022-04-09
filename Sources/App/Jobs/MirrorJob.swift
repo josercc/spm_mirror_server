@@ -4,8 +4,8 @@ import FluentKit
 struct MirrorJob: MirrorAsyncJob {
     func dequeue(_ context: QueueContext, _ payload: PayloadData) async throws {
         context.logger.info("MirrorJob:")
-       /// 查询是否还有未完成的任务并且重试次数还没有超过60次
-        let waitMirror = try await Mirror.query(on: context.application.db).filter(\.$isExit == false).filter(\.$waitCount <= 60).first()
+       /// 查询是否还有未完成的任务并且重试次数还没有超过5次
+        let waitMirror = try await Mirror.query(on: context.application.db).filter(\.$isExit == false).filter(\.$waitCount <= 5).first()
         /// 如果有未完成的任务则开启未完成任务
         if let waitMirror = waitMirror {
             let mirrorJob = WaitMirrorJob.PayloadData(config: payload.config, mirror: waitMirror)
