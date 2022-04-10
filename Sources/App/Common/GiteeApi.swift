@@ -54,6 +54,22 @@ public class GiteeApi {
         let orgs = try await getUserOrg(client: client)
         return orgs.contains(where: { $0.name == org })
     }
+
+    func getFileContent(name:String, repo:String, path:String = "", in client:Client) async throws -> [GithubApi.GetFileContentResponse] {
+        let uri = URI(string: "https://gitee.com/api/v5/repos/\(name)/\(repo)/contents/\(path)?access_token=\(token)")
+        let response = try await client.get(uri)
+        try response.printError(app: app, uri: uri)
+        guard let body = response.body else {
+            throw Abort(.badRequest, reason: "body is nil")
+        }
+        let data = try JSONSerialization.jsonObject(with: body)
+        if data is [Any] {
+            return try response.content.decode([GithubApi.GetFileContentResponse].self)
+        } else if data is [String:Any] {
+            return [try response.content.decode(GithubApi.GetFileContentResponse.self)]
+        }
+        return []
+    }
 }
 
 struct Repo: Codable {

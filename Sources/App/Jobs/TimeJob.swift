@@ -7,7 +7,7 @@ struct TimeJob: AsyncScheduledJob {
             return
         }
         await mirrorJobStatus.start()
-       /// 开启任务
+        /// 开启任务
         let configration = try MirrorConfigration()
         let job = MirrorJob.PayloadData(config: configration)
         try await context.application.queues.queue.dispatch(MirrorJob.self, job)

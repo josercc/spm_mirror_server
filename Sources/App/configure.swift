@@ -50,31 +50,6 @@ public func configure(_ app: Application) throws {
     app.queues.schedule(TimeJob())
     .daily()
     .at(.noon)
-
-    // app.threadPool.runIfActive(eventLoop: app.eventLoopGroup.next(), {
-    //     sleep(1)
-    //     /// 获取配置文件 MirrorConfigration
-    //     let config = try MirrorConfigration()
-    //     /// 开启镜像任务
-    //     let job = MirrorJob.PayloadData(config: config)
-    //     /// 开启任务
-    //     Task {
-    //         let isRunning = await mirrorJobStatus.isRunning
-    //         guard !isRunning else {
-    //             app.logger.info("当前存在其他镜像任务，启动镜像任务失败")
-    //             return
-    //         }
-    //         await mirrorJobStatus.start()
-    //         do {
-    //             try await app.queues.queue.dispatch(MirrorJob.self, job)
-    //         } catch (let e) {
-    //             /// 创建weixin Hook
-    //             let hook = WeiXinWebHooks(app: app, url: config.wxHookUrl)
-    //             hook.sendContent(e.localizedDescription, in: app.client)
-    //         }
-    //         await mirrorJobStatus.stop()
-    //     }
-    // })
 }
 
 

@@ -32,6 +32,11 @@ public struct WeiXinWebHooks {
             try response.printError(app: app, uri: uri, codes: [])
         }
     }
+
+    static func sendContent(_ content:String, in app:Application, config:MirrorConfigration) {
+        let wxApi = WeiXinWebHooks(app: app, url: config.wxHookUrl)
+        wxApi.sendContent(content, in: app.client)
+    }
 }
 
 struct WeiXinWebHookContent: Codable {

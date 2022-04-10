@@ -39,28 +39,9 @@ struct UpdateMirrorJob: MirrorAsyncJob {
         if !exists {
             try await giteeApi.createOrg(client: context.application.client, name: dst)
         }
-        /// 获取仓库名称
-        guard let repo = repoNamePath(from: origin) else {
-            throw Abort(.expectationFailed)
-        }
-        /// 获取创建YML文件名称
-        let ymlFilePath = try getYmlFilePath(url: origin)
-        /// 创建 Github Api
-        let githubApi = try GithubApi(app: context.application, token: payload.config.githubToken, repo: payload.config.githubRepo)
-        /// 获取之前仓库是否是组织
-        let isOrg = try await githubApi.isOrg(name: src, client: context.application.client)
-        /// Github 新增Action内容
-        let ymlContent = actionContent(src: src, dst: dst, isOrg: isOrg, repo: repo, mirror: dst)
-        /// 检测 YML 是否存在
-        let ymlExit = try await githubApi.ymlExit(file: ymlFilePath, in: context.application.client)
-        /// 如果存在则删除YML
-        if ymlExit {
-            try await githubApi.deleteYml(fileName: ymlFilePath, in: context.application.client) 
-        }
-        /// 如果创建 YML 文件失败则退出
-        guard try await githubApi.addGithubAction(fileName: ymlFilePath, content: ymlContent, client: context.application.client) else {
-            throw Abort(.custom(code: 10000, reasonPhrase: "创建\(ymlFilePath)失败"))
-        }
+        /// 开启创建YML文件 
+        let job = CreateYMLJob.PayloadData(config: payload.config, origin: mirror.origin, dst: dst)
+        try await context.queue.dispatch(CreateYMLJob.self, job)
         /// 延时5秒开启新任务
         let _ = try await context.application.threadPool.runIfActive(eventLoop: context.application.eventLoopGroup.next(), {
             sleep(5)

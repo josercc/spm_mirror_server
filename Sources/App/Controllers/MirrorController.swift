@@ -71,7 +71,7 @@ struct MirrorController: RouteCollection {
 
     func openMirrorJob(req:Request) async throws -> ResponseModel<String> {
         let isRunning = await mirrorJobStatus.isRunning
-        guard !isRunning else {
+        if isRunning {
             return .init(failure: 10000, message: "当前存在运行的镜像任务 打开新的镜像任务失败！")
         }
         Task {
@@ -80,10 +80,10 @@ struct MirrorController: RouteCollection {
                 await mirrorJobStatus.start()
                 do {
 
-                /// 开启新的任务
-                let job = MirrorJob.PayloadData(config: config)
-                /// 开启任务
-                try await req.queue.dispatch(MirrorJob.self, job)
+                    /// 开启新的任务
+                    let job = MirrorJob.PayloadData(config: config)
+                    /// 开启任务
+                    try await req.queue.dispatch(MirrorJob.self, job)
                 } catch(let e) {
                     let hook  = WeiXinWebHooks(app: req.application, url: config.wxHookUrl)
                     hook.sendContent(e.localizedDescription, in: req.client)

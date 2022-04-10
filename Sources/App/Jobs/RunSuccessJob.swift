@@ -3,6 +3,7 @@ import FluentKit
 import Vapor
 struct RunSuccessJob: MirrorAsyncJob {
     func dequeue(_ context: QueueContext, _ payload: PayloadData) async throws {
+        context.logger.info("制作镜像成功:->>\(payload.origin)")
         /// 获取YML文件路径
         let ymlPath = try getYmlFilePath(url: payload.origin)
         /// 创建 Github api
@@ -19,7 +20,7 @@ struct RunSuccessJob: MirrorAsyncJob {
             try await stack.delete(on: context.application.db)
         }
         /// 查询镜像
-        if let mirror = try await Mirror.query(on: context.application.db).filter(\.$origin == payload.origin).first() {
+        if let mirror = try await Mirror.query(on: context.application.db).filter(\.$origin == payload.origin).filter(\.$isExit == false).first() {
             /// 更新是否存在
             mirror.isExit = true
             mirror.needUpdate = false

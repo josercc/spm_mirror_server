@@ -8,6 +8,7 @@
 import Foundation
 import ConsoleKit
 import Vapor
+import Queues
 
 func repoPath(from url:String, host:String = "https://github.com/") -> String {
     return url.replacingOccurrences(of: host, with: "")
@@ -26,7 +27,8 @@ func actionContent(src:String,
                    dst:String,
                    isOrg:Bool,
                    repo:String,
-                   mirror:String) -> String {
+                   mirror:String? = nil) -> String {
+    let mirror = mirror ?? repo
     return """
     #
     on:
@@ -98,4 +100,31 @@ extension ClientResponse {
             throw Abort(.custom(code: self.status.code, reasonPhrase: "\(uri):\(content)"))
         }
     }
+}
+
+/// 检查镜像仓库是否存在
+func checkMirrorRepoExit<T: JobPayload>(_ context: QueueContext, _ payload: T, _ origin:String, _ mirror:String) async throws -> Bool {
+    let githubApi = try GithubApi(app: context.application, token: payload.config.githubToken, repo: payload.config.githubRepo)
+    guard let githubOrg = repoOriginPath(from: origin) else {
+        throw Abort(.custom(code: 10000, reasonPhrase: "\(origin)中获取组织或者用户失败"))
+    }
+    guard let githubName = repoNamePath(from: origin) else {
+        throw Abort(.custom(code: 10000, reasonPhrase: "\(origin)中获取仓库名称失败"))
+    }
+    let githubPackageContents = try await githubApi.getContents(name: githubOrg, repo: githubName, path: "Package.swift")
+    guard let githubPakcageContent = githubPackageContents.first else {
+        throw Abort(.custom(code: 10000, reasonPhrase: "\(origin) Package.swift 不存在"))
+    }
+    guard let giteeOrg = repoOriginPath(from: mirror, host: "https://gitee.com/") else {
+        throw Abort(.custom(code: 10000, reasonPhrase: "\(mirror)中获取组织或者用户失败"))
+    }
+    let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
+    let giteePackageContents = try await giteeApi.getFileContent(name: giteeOrg, repo: mirror, path: "Package.swift", in: context.application.client)
+    guard let giteePakcageContent = giteePackageContents.first else {
+        return false
+    }
+    guard githubPakcageContent.content == giteePakcageContent.content else {
+        return false
+    }
+    return true
 }

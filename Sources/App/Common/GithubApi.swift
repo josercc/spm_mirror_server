@@ -13,6 +13,7 @@ public struct GithubApi {
     let userAgent:String
     let repo:String
     let app:Application
+    let host = "https://api.github.com"
     public init(app:Application, token:String, repo:String) throws {
         self.token = token
         self.userAgent = """
@@ -25,7 +26,7 @@ public struct GithubApi {
     func addGithubAction(fileName:String,
                          content:String,
                          client:Client) async throws -> Bool {
-        let url = "https://api.github.com/repos/josercc/\(repo)/contents/.github/workflows/\(fileName)";
+        let url = "\(host)/repos/josercc/\(repo)/contents/.github/workflows/\(fileName)";
         let uri = URI(string: url)
         let response = try await client.put(uri, beforeSend: { request in
             request.headers = headers
@@ -39,7 +40,7 @@ public struct GithubApi {
     }
     
     func isOrg(name:String, client:Client) async throws -> Bool {
-        let uri = URI(string: "https://api.github.com/users/\(name)")
+        let uri = URI(string: "\(host)/users/\(name)")
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
         })
@@ -49,7 +50,7 @@ public struct GithubApi {
     }
     
     func ymlExit(file:String, in client:Client) async throws -> Bool {
-        let uri = URI(string: "https://api.github.com/repos/josercc/\(repo)/contents/.github/workflows/\(file)")
+        let uri = URI(string: "\(host)/repos/josercc/\(repo)/contents/.github/workflows/\(file)")
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
         })
@@ -58,7 +59,7 @@ public struct GithubApi {
     }
     
     func deleteYml(fileName:String, in client:Client) async throws {
-        let uri = URI(string: "https://api.github.com/repos/josercc/\(repo)/contents/.github/workflows/\(fileName)")
+        let uri = URI(string: "\(host)/repos/josercc/\(repo)/contents/.github/workflows/\(fileName)")
         /// 读取文件信息
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
@@ -77,7 +78,7 @@ public struct GithubApi {
     }
     
     func fetchRunStatus(repo:String, in client:Client) async throws -> RunStatus {
-        let uri = URI(string: "https://api.github.com/repos/josercc/sync2gitee/actions/runs?per_page=10")
+        let uri = URI(string: "\(host)/repos/josercc/sync2gitee/actions/runs?per_page=10")
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
             try request.query.encode([
@@ -99,6 +100,28 @@ public struct GithubApi {
             return .success
         }
     }
+
+    func getContents(name:String, repo:String, path:String) async throws -> [GetFileContentResponse] {
+        let uri = URI(string: "\(host)/repos/\(name)/\(repo)/contents/\(path)")
+        let response = try await app.client.get(uri, beforeSend: { request in
+            request.headers = headers
+        })
+        try response.printError(app: app, uri: uri, codes: [200,404])
+        if response.status.code == 404 {
+            return []
+        }
+        guard let body = response.body else {
+            throw Abort(.internalServerError, reason: "body is nil")
+        }
+        let object = try JSONSerialization.jsonObject(with: body, options: .fragmentsAllowed)
+        if object is [Any] {
+            return try response.content.decode([GetFileContentResponse].self)
+        } else if object is [String:Any] {
+            return [try response.content.decode(GetFileContentResponse.self)]
+        } else {
+            throw Abort(.internalServerError, reason: "unknown type")
+        }
+    }
     
     var headers:HTTPHeaders {
         var headers = HTTPHeaders()
@@ -110,8 +133,10 @@ public struct GithubApi {
 }
 
 extension GithubApi {
-    struct GetFileContentResponse: Codable {
+    struct GetFileContentResponse: Content {
         let sha:String
+        let name:String
+        let content:String
     }
 }
 
