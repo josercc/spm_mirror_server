@@ -82,11 +82,13 @@ public struct GithubApi {
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
             try request.query.encode([
-                "per_page":"3"
+                "per_page":"1"
             ])
         })
         try response.printError(app: app, uri: uri)
-        let runResponse = try response.content.decode(FetchRunStatusResponse.self)
+        guard  let runResponse = try? response.content.decode(FetchRunStatusResponse.self) else {
+            return .notExit
+        }
         guard let run = runResponse.workflow_runs.first(where: {$0.name.contains(repo)}) else {
             return .notExit
         }
