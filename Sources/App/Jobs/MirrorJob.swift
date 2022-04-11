@@ -110,7 +110,7 @@ extension MirrorJob {
                 /// 重新开始任务
                 try await start(context, payload)
                 let ymlFile = try getYmlFilePath(url: mirror.origin)
-                try githubApi.deleteYml(fileName: ymlFile, in: context.application.db)
+                try await githubApi.deleteYml(fileName: ymlFile, in: context.application.client)
                 return
             }
         }
