@@ -82,7 +82,7 @@ public struct GithubApi {
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
             try request.query.encode([
-                "per_page":"10"
+                "per_page":"3"
             ])
         })
         try response.printError(app: app, uri: uri)
@@ -93,6 +93,10 @@ public struct GithubApi {
         if run.status == "queued" {
             return .queued
         } else if run.status == "in_progress" {
+            if let run_started_at = run.run_started_at,
+                (Date().timeIntervalSince1970 - run_started_at.timeIntervalSince1970) > 1 * 60 * 60 {
+                return .timeOut
+            }
             return .inProgress
         } else if run.status == "completed", run.conclusion == "failure" {
             return .failure
@@ -146,6 +150,7 @@ enum RunStatus {
     case success
     case failure
     case notExit
+    case timeOut
 }
 
 struct FetchRunStatusResponse: Content {
@@ -157,5 +162,6 @@ extension FetchRunStatusResponse {
         let name:String
         let status:String
         let conclusion:String?
+        let run_started_at:Date?
     }
 }

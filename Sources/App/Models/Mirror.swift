@@ -40,6 +40,9 @@ final class Mirror: Model, Content {
     @Field(key: "wait_count")
     var waitCount:Int
     
+    @Field(key: "wait_progress_count")
+    var waitProgressCount:Int
+    
     init() {
         
     }
@@ -53,6 +56,7 @@ final class Mirror: Model, Content {
         self.lastMittorDate = Date().timeIntervalSince1970
         self.needUpdate = false
         self.waitCount = 0
+        self.waitProgressCount = 0
     }
 }
 

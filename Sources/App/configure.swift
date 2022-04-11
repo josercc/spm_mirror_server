@@ -27,6 +27,8 @@ public func configure(_ app: Application) throws {
     app.migrations.add(CreateMirrorRequest())
     app.migrations.add(UpdateMirror001())
     app.migrations.add(UpdateMirror002())
+    
+    app.migrations.add(UpdateMirror003())
     try app.autoMigrate().wait()
     
     app.logger.logLevel = .info

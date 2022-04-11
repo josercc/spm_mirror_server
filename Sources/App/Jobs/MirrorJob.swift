@@ -15,7 +15,7 @@ struct MirrorJob: MirrorAsyncJob {
                 return
             }
             /// 如果等待次数小于6 才允许执行等待
-            if waitMirror.waitCount < 6 {
+            if waitMirror.waitCount <= 5, waitMirror.waitProgressCount <= 120 {
                 try await wait(context, payload, waitMirror)
                 return
             } else if try await checkMirrorRepoExit(context, payload, waitMirror.origin, waitMirror.mirror) {
@@ -83,13 +83,33 @@ extension MirrorJob {
             try await success(context, payload, mirror.origin)
             return
         }
+        if runStatus == .timeOut,
+           let mirror = try await Mirror.find(mirror.id, on: context.application.db) {
+            mirror.waitProgressCount = 120
+            try await mirror.update(on: context.application.db)
+        }
         /// 如果处于等待和制作中 则等待30秒开始新的任务
-        if runStatus == .queued || runStatus == .inProgress {
-            context.logger.info("镜像正在制作中,延时30秒开启新任务")
-            let _ = try await context.application.threadPool.runIfActive(eventLoop: context.eventLoop, {
-                sleep(30)
-            }).get()
-            try await wait(context, payload, mirror)
+        if runStatus == .queued || runStatus == .inProgress || runStatus == .timeOut {
+            if let mirror = try await Mirror.find(mirror.id, on: context.application.db) {
+                var waitProgressCount = mirror.waitProgressCount
+                waitProgressCount += 1
+                mirror.waitProgressCount = waitProgressCount
+                try await mirror.update(on: context.application.db)
+                if waitProgressCount > 120 {
+                    WeiXinWebHooks.sendContent("\(mirror.origin)制作镜像\(mirror.mirror)制作已经超过了1个小时，请手动导入！",
+                                               context.application,
+                                               payload.config)
+                    let ymlFile = try getYmlFilePath(url: mirror.origin)
+                    try await githubApi.deleteYml(fileName: ymlFile, in: context.application.client)
+                    try await start(context, payload)
+                } else {
+                    context.logger.info("镜像正在制作中,延时30秒开启新任务")
+                    let _ = try await context.application.threadPool.runIfActive(eventLoop: context.eventLoop, {
+                        sleep(30)
+                    }).get()
+                    try await wait(context, payload, mirror)
+                }
+            }
             return
         }
         context.logger.info("镜像制作失败或者未开始,开始重试任务")
@@ -157,6 +177,7 @@ extension MirrorJob {
             mirror.needUpdate = false
             mirror.lastMittorDate = Date().timeIntervalSince1970
             mirror.waitCount = 0
+            mirror.waitProgressCount = 0
             try await mirror.update(on: context.application.db)            
         }
         try await start(context, payload)
