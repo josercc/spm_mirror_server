@@ -40,10 +40,6 @@ public func configure(_ app: Application) throws {
     app.redis.configuration = try RedisConfiguration(hostname: redisHost, pool: .init(initialConnectionBackoffDelay: .seconds(30), connectionRetryTimeout: .seconds(30)))
     try app.queues.use(.redis(url: "redis://\(redisHost):6379"))
     app.queues.add(MirrorJob())
-    app.queues.add(StartMirrorJob())
-    app.queues.add(UpdateMirrorJob())
-    app.queues.add(WaitMirrorJob())
-    app.queues.add(RunSuccessJob())
     try app.queues.startInProcessJobs(on: .default)
 
     /// 每天下午12点开启任务

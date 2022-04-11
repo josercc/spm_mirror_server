@@ -33,7 +33,7 @@ public struct WeiXinWebHooks {
         }
     }
 
-    static func sendContent(_ content:String, in app:Application, config:MirrorConfigration) {
+    static func sendContent(_ content:String, _ app:Application, _ config:MirrorConfigration) {
         let wxApi = WeiXinWebHooks(app: app, url: config.wxHookUrl)
         wxApi.sendContent(content, in: app.client)
     }

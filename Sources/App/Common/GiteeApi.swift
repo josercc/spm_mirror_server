@@ -58,7 +58,10 @@ public class GiteeApi {
     func getFileContent(name:String, repo:String, path:String = "", in client:Client) async throws -> [GithubApi.GetFileContentResponse] {
         let uri = URI(string: "https://gitee.com/api/v5/repos/\(name)/\(repo)/contents/\(path)?access_token=\(token)")
         let response = try await client.get(uri)
-        try response.printError(app: app, uri: uri)
+        try response.printError(app: app, uri: uri, codes: [200,404])
+        if response.status.code == 404 {
+            return []
+        }
         guard let body = response.body else {
             throw Abort(.badRequest, reason: "body is nil")
         }

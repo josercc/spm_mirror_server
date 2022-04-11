@@ -119,11 +119,11 @@ func checkMirrorRepoExit<T: JobPayload>(_ context: QueueContext, _ payload: T, _
         throw Abort(.custom(code: 10000, reasonPhrase: "\(mirror)中获取组织或者用户失败"))
     }
     let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
-    let giteePackageContents = try await giteeApi.getFileContent(name: giteeOrg, repo: mirror, path: "Package.swift", in: context.application.client)
+    let giteePackageContents = try await giteeApi.getFileContent(name: giteeOrg, repo: githubName, path: "Package.swift", in: context.application.client)
     guard let giteePakcageContent = giteePackageContents.first else {
         return false
     }
-    guard githubPakcageContent.content == giteePakcageContent.content else {
+    guard githubPakcageContent.content.replacingOccurrences(of: "\n", with: "") == giteePakcageContent.content else {
         return false
     }
     return true
