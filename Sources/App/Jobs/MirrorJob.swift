@@ -28,7 +28,13 @@ struct MirrorJob: MirrorAsyncJob {
         let mirrorStack = try await MirrorStack.query(on: context.application.db).sort(\.$create, .descending).first()
         /// 如果镜像队列存在则开启镜像任务
         if let mirrorStack = mirrorStack {
-            try await create(context, payload, mirrorStack.url)
+            let mirrors = try await Mirror.query(on: context.application.db).filter(\.$origin == mirrorStack.url).all()
+            if mirrors.count > 0 {
+                try await mirrorStack.delete(on: context.application.db)
+                try await start(context, payload)
+            } else {
+                try await create(context, payload, mirrorStack.url)
+            }
             return
         }
         /// 获取需要进行更新的镜像
@@ -90,17 +96,21 @@ extension MirrorJob {
         /// 如果处于失败状态 则增加等待次数
         if runStatus == .failure, let mirror = try await Mirror.find(mirror.id, on: context.application.db) {
             context.logger.info("镜像制作失败,增加等待次数")
+            var waitCount = mirror.waitCount
+            waitCount += 1
             /// 增加等待次数
-            mirror.waitCount += 1
+            mirror.waitCount = waitCount
             /// 更新镜像数据
             try await mirror.update(on: context.application.db)
             /// 如果等待次数大于5次则微信通知
-            if mirror.waitCount > 5 {
+            if waitCount > 5 {
                 context.logger.info("镜像制作失败超过5次,微信通知")
                 /// 发送微信通知
                 WeiXinWebHooks.sendContent("\(mirror.origin)镜像制作失败,请检查镜像是否正常制作", context.application, payload.config)
                 /// 重新开始任务
                 try await start(context, payload)
+                let ymlFile = try getYmlFilePath(url: mirror.origin)
+                try githubApi.deleteYml(fileName: ymlFile, in: context.application.db)
                 return
             }
         }
