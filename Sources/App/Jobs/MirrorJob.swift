@@ -126,7 +126,7 @@ extension MirrorJob {
             if waitCount > 5 {
                 context.logger.info("镜像制作失败超过5次,微信通知")
                 /// 发送微信通知
-                WeiXinWebHooks.sendContent("\(mirror.origin)镜像制作失败,请检查镜像是否正常制作", context.application, payload.config)
+                WeiXinWebHooks.sendContent("\(mirror.origin)镜像制作\(mirror.mirror)失败,请检查镜像是否正常制作", context.application, payload.config)
                 /// 重新开始任务
                 try await start(context, payload)
                 let ymlFile = try getYmlFilePath(url: mirror.origin)
