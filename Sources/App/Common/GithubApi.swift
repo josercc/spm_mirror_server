@@ -93,10 +93,6 @@ public struct GithubApi {
         if run.status == "queued" {
             return .queued
         } else if run.status == "in_progress" {
-            if let run_started_at = run.run_started_at,
-                (Date().timeIntervalSince1970 - run_started_at.timeIntervalSince1970) > 1 * 60 * 60 {
-                return .timeOut
-            }
             return .inProgress
         } else if run.status == "completed", run.conclusion == "failure" {
             return .failure
@@ -162,6 +158,6 @@ extension FetchRunStatusResponse {
         let name:String
         let status:String
         let conclusion:String?
-        let run_started_at:Date?
+        let run_started_at:String?
     }
 }
