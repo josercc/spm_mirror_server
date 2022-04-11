@@ -92,14 +92,17 @@ extension MirrorJob {
             context.logger.info("镜像制作失败,增加等待次数")
             /// 增加等待次数
             mirror.waitCount += 1
+            /// 更新镜像数据
+            try await mirror.update(on: context.application.db)
             /// 如果等待次数大于5次则微信通知
             if mirror.waitCount > 5 {
                 context.logger.info("镜像制作失败超过5次,微信通知")
                 /// 发送微信通知
                 WeiXinWebHooks.sendContent("\(mirror.origin)镜像制作失败,请检查镜像是否正常制作", context.application, payload.config)
+                /// 重新开始任务
+                try await start(context, payload)
+                return
             }
-            /// 更新镜像数据
-            try await mirror.update(on: context.application.db)
         }
         guard let dst = repoOriginPath(from: mirror.mirror, host: "https://gitee.com/") else {
             throw Abort(.custom(code: 10000, reasonPhrase: "获取镜像组织名称失败"))
@@ -222,6 +225,10 @@ extension MirrorJob {
             /// 保存新的镜像
             let mirrorData = Mirror(origin: origin, mirror: mirrorRepo)
             try await mirrorData.save(on: context.application.db)
+        }
+        if try await checkMirrorRepoExit(context, payload, origin, mirrorRepo) {
+            try await success(context, payload, origin)
+            return
         }
         /// 创建 YML文件
         try await createYml(context, payload, origin, dst)
