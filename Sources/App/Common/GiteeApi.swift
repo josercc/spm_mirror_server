@@ -77,7 +77,7 @@ public class GiteeApi {
         /// https://gitee.com/api/v5/repos/{owner}/{repo}
         let uri = URI(string: "\(host)/repos/\(name)/\(repo)?access_token=\(token)")
         let response = try await client.delete(uri)
-        try response.printError(app: app, uri: uri, codes: [204])
+        try response.printError(app: app, uri: uri, codes: [204,404])
     }
 }
 
