@@ -138,7 +138,7 @@ extension MirrorJob {
         guard let dst = repoOriginPath(from: mirror.mirror, host: "https://gitee.com/") else {
             throw Abort(.custom(code: 10000, reasonPhrase: "获取镜像组织名称失败"))
         }
-        try deleteRepo(context, payload, mirror: mirror.mirror)
+        try await deleteRepo(context, payload, mirror: mirror.mirror)
         try await createYml(context, payload, mirror.origin, dst)
     }
 }
