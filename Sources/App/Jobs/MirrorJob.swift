@@ -110,18 +110,6 @@ extension MirrorJob {
                     try await wait(context, payload, mirror)
                 }
             }
-            /// 获取GiteeApi
-            let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
-            guard let org = repoOriginPath(from: mirror.mirror, host: "https://gitee.com/") else {
-                throw Abort(.badRequest, reason: "仓库地址错误")
-            }
-            guard let name = repoNamePath(from: mirror.mirror, host: "https://gitee.com/") else {
-                throw Abort(.badRequest, reason: "仓库地址错误")
-            }
-            /// 如果镜像在Gitee存在，但是不存在Package 则删除仓库
-            if try await giteeApi.checkRepoExit(repo: repoPath, in: context.application.client), try await giteeApi.getFileContent(name: org, repo: "Package.swift", in: context.application.client).count == 0 {
-                try await giteeApi.deleteRepo(name: name, repo: org, in: context.application.client)
-            }
             return
         }
         context.logger.info("镜像制作失败或者未开始,开始重试任务")
@@ -148,6 +136,18 @@ extension MirrorJob {
         }
         guard let dst = repoOriginPath(from: mirror.mirror, host: "https://gitee.com/") else {
             throw Abort(.custom(code: 10000, reasonPhrase: "获取镜像组织名称失败"))
+        }
+        /// 获取GiteeApi
+        let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
+        guard let org = repoOriginPath(from: mirror.mirror, host: "https://gitee.com/") else {
+            throw Abort(.badRequest, reason: "仓库地址错误")
+        }
+        guard let name = repoNamePath(from: mirror.mirror, host: "https://gitee.com/") else {
+            throw Abort(.badRequest, reason: "仓库地址错误")
+        }
+        /// 如果镜像在Gitee存在，但是不存在Package 则删除仓库
+        if try await giteeApi.checkRepoExit(repo: repoPath, in: context.application.client), try await giteeApi.getFileContent(name: org, repo: "Package.swift", in: context.application.client).count == 0 {
+            try await giteeApi.deleteRepo(name: name, repo: org, in: context.application.client)
         }
         try await createYml(context, payload, mirror.origin, dst)
     }

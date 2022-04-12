@@ -83,17 +83,21 @@ public struct GithubApi {
             request.headers = headers
         })
         try response.printError(app: app, uri: uri)
-        guard  let runResponse = try? response.content.decode(FetchRunStatusResponse.self) else {
-            return .notExit
-        }
-        guard let run = runResponse.workflow_runs.first(where: {$0.name.contains(repo)}) else {
+        let runResponse = try response.content.decode(FetchRunStatusResponse.self, using: JSONDecoder.custom(keys:.convertFromSnakeCase))
+        guard let run = runResponse.workflowRuns.first(where: {$0.name.contains(repo)}) else {
             return .notExit
         }
         if run.status == "queued" {
             return .queued
         } else if run.status == "in_progress" {
+//            let waitTime = Date().timeIntervalSince1970 - run.runStartedAt.timeIntervalSince1970
+//            if waitTime > 1 * 60 * 60 {
+//                return .timeOut
+//            }
             return .inProgress
-        } else if run.status == "completed", run.conclusion == "failure" {
+        } else if run.status == "completed",
+                  let conclusion = run.conclusion,
+                  conclusion == "failure" {
             return .failure
         } else {
             return .success
@@ -149,7 +153,7 @@ enum RunStatus {
 }
 
 struct FetchRunStatusResponse: Content {
-    let workflow_runs:[Run]
+    let workflowRuns:[Run]
 }
 
 extension FetchRunStatusResponse {
@@ -157,6 +161,6 @@ extension FetchRunStatusResponse {
         let name:String
         let status:String
         let conclusion:String?
-        let run_started_at:String?
+        let runStartedAt:String
     }
 }

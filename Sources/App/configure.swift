@@ -48,6 +48,8 @@ public func configure(_ app: Application) throws {
     app.queues.schedule(TimeJob())
     .daily()
     .at(.noon)
+
+    app.middleware.use(CORSMiddleware())
 }
 
 
