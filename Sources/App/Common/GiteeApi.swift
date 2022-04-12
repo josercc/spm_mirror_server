@@ -38,15 +38,13 @@ public class GiteeApi {
         try response.printError(app: app, uri: uri, codes: [201])
     }
     
-//     func checkRepoExit(repo:String, in client:Client) async throws -> Bool {
-// //        let uri = URI(string: "https://gitee.com/api/v5/search/repositories?access_token=\(token)&q=\(repo)")
-// //        let response = try await client.get(uri)
-// //        try response.printError(app: app, uri: uri)
-// //        let repos = try response.content.decode([Repo].self)
-// //        return repos.count > 0
-//         let uri = URI(string: "https://gitee.com/\(repo)/raw/main/Package.swift")
-//         /// 获取 Package的内容 如果存在就代表仓库
-//     }
+    func checkRepoExit(repo:String, in client:Client) async throws -> Bool {
+       let uri = URI(string: "https://gitee.com/api/v5/search/repositories?access_token=\(token)&q=\(repo)")
+       let response = try await client.get(uri)
+       try response.printError(app: app, uri: uri)
+       let repos = try response.content.decode([Repo].self)
+       return repos.count > 0
+    }
 
     /// 检查组织是否存在
     func checkOrgExit(org:String, in client:Client) async throws -> Bool {
@@ -72,6 +70,14 @@ public class GiteeApi {
             return [try response.content.decode(GithubApi.GetFileContentResponse.self)]
         }
         return []
+    }
+
+    /// 删除一个仓库
+    func deleteRepo(name:String, repo:String, in client:Client) async throws {
+        /// https://gitee.com/api/v5/repos/{owner}/{repo}
+        let uri = URI(string: "\(host)/repos/\(name)/\(repo)?access_token=\(token)")
+        let response = try await client.delete(uri)
+        try response.printError(app: app, uri: uri, codes: [204])
     }
 }
 
