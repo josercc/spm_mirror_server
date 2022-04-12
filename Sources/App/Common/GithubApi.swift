@@ -90,13 +90,17 @@ public struct GithubApi {
         if run.status == "queued" {
             return .queued
         } else if run.status == "in_progress" {
-            if let runStartedAt = run.runStartedAt {
-//                let waitTime = Date().timeIntervalSince1970 - runStartedAt.timeIntervalSince1970
-//                if waitTime > 1 * 60 * 60 {
-//                    return .timeOut
-//                }
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXX"
+            guard let runStartedAt = run.runStartedAt,
+                  let date = dateFormatter.date(from: runStartedAt) else {
+                return .inProgress
             }
-            return .inProgress
+            let waitTime = Date().timeIntervalSince1970 - date.timeIntervalSince1970
+            guard waitTime > 1 * 60 * 60 else {
+                return .inProgress
+            }
+            return .timeOut
         } else if run.status == "completed",
                   let conclusion = run.conclusion,
                   conclusion == "failure" {

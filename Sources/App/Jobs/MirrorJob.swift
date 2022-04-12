@@ -15,7 +15,7 @@ struct MirrorJob: MirrorAsyncJob {
                 return
             }
             /// 如果等待次数小于6 才允许执行等待
-            if waitMirror.waitCount <= 5, waitMirror.waitProgressCount <= 120 {
+            if waitMirror.waitCount <= 2, waitMirror.waitProgressCount <= 120 {
                 try await wait(context, payload, waitMirror)
                 return
             } else if try await checkMirrorRepoExit(context, payload, waitMirror.origin, waitMirror.mirror) {
@@ -122,33 +122,23 @@ extension MirrorJob {
             mirror.waitCount = waitCount
             /// 更新镜像数据
             try await mirror.update(on: context.application.db)
-            /// 如果等待次数大于5次则微信通知
-            if waitCount > 5 {
+            /// 如果等待次数大于2次则微信通知
+            if waitCount > 2 {
                 context.logger.info("镜像制作失败超过5次,微信通知")
                 /// 发送微信通知
                 WeiXinWebHooks.sendContent("\(mirror.origin)镜像制作\(mirror.mirror)失败,请检查镜像是否正常制作", context.application, payload.config)
-                /// 重新开始任务
-                try await start(context, payload)
                 let ymlFile = try getYmlFilePath(url: mirror.origin)
                 try await githubApi.deleteYml(fileName: ymlFile, in: context.application.client)
+                try await deleteRepo(context, payload, mirror: mirror.mirror)
+                /// 重新开始任务
+                try await start(context, payload)
                 return
             }
         }
         guard let dst = repoOriginPath(from: mirror.mirror, host: "https://gitee.com/") else {
             throw Abort(.custom(code: 10000, reasonPhrase: "获取镜像组织名称失败"))
         }
-        /// 获取GiteeApi
-        let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
-        guard let org = repoOriginPath(from: mirror.mirror, host: "https://gitee.com/") else {
-            throw Abort(.badRequest, reason: "仓库地址错误")
-        }
-        guard let name = repoNamePath(from: mirror.mirror, host: "https://gitee.com/") else {
-            throw Abort(.badRequest, reason: "仓库地址错误")
-        }
-        /// 如果镜像在Gitee存在，但是不存在Package 则删除仓库
-        if try await giteeApi.checkRepoExit(repo: repoPath, in: context.application.client), try await giteeApi.getFileContent(name: org, repo: "Package.swift", in: context.application.client).count == 0 {
-            try await giteeApi.deleteRepo(name: name, repo: org, in: context.application.client)
-        }
+        try deleteRepo(context, payload, mirror: mirror.mirror)
         try await createYml(context, payload, mirror.origin, dst)
     }
 }
@@ -300,6 +290,24 @@ extension MirrorJob {
         }
         /// 创建YML文件
         try await createYml(context, payload, origin, dst)
+    }
+}
+
+extension MirrorJob {
+    func deleteRepo(_ context:QueueContext, _ payload:Payload, mirror:String) async throws {
+        /// 获取GiteeApi
+        let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
+        guard let org = repoOriginPath(from: mirror, host: "https://gitee.com/") else {
+            throw Abort(.badRequest, reason: "仓库地址错误")
+        }
+        guard let name = repoNamePath(from: mirror, host: "https://gitee.com/") else {
+            throw Abort(.badRequest, reason: "仓库地址错误")
+        }
+        let repoPath = repoPath(from: mirror, host: "https://gitee.com/")
+        /// 如果镜像在Gitee存在，但是不存在Package 则删除仓库
+        if try await giteeApi.checkRepoExit(repo: repoPath, in: context.application.client), try await giteeApi.getFileContent(name: org, repo: "Package.swift", in: context.application.client).count == 0 {
+            try await giteeApi.deleteRepo(name: name, repo: org, in: context.application.client)
+        }
     }
 }
 
