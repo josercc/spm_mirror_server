@@ -178,7 +178,7 @@ extension GithubApi {
     struct GetFileContentResponse: Content {
         let sha:String
         let name:String
-        let content:String
+        let content:String?
     }
 }
 

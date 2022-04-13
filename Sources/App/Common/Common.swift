@@ -112,7 +112,7 @@ func checkMirrorRepoExit<T: JobPayload>(_ context: QueueContext, _ payload: T, _
         throw Abort(.custom(code: 10000, reasonPhrase: "\(origin)中获取仓库名称失败"))
     }
     let githubPackageContents = try await githubApi.getContents(name: githubOrg, repo: githubName, path: "Package.swift")
-    guard let githubPakcageContent = githubPackageContents.first else {
+    guard let githubPakcageContent = githubPackageContents.first?.content else {
         throw Abort(.custom(code: 10000, reasonPhrase: "\(origin) Package.swift 不存在"))
     }
     guard let giteeOrg = repoOriginPath(from: mirror, host: "https://gitee.com/") else {
@@ -124,10 +124,10 @@ func checkMirrorRepoExit<T: JobPayload>(_ context: QueueContext, _ payload: T, _
         return .repoNotExit
     }
     let giteePackageContents = try await giteeApi.getFileContent(name: giteeOrg, repo: githubName, path: "Package.swift", in: context.application.client)
-    guard let giteePakcageContent = giteePackageContents.first else {
+    guard let giteePakcageContent = giteePackageContents.first?.content else {
         return .repoEmpty
     }
-    guard githubPakcageContent.content.replacingOccurrences(of: "\n", with: "") == giteePakcageContent.content else {
+    guard githubPakcageContent.replacingOccurrences(of: "\n", with: "") == giteePakcageContent else {
         return .repoExitOther
     }
     return .repoExit
