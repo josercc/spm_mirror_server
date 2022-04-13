@@ -90,7 +90,7 @@ func getYmlFilePath(url:String) throws -> String {
 extension ClientResponse {
     func printError(app:Application, uri:URI, codes:[UInt] = [200]) throws {
         guard let body = self.body else {
-            throw Abort(.custom(code: 10000, reasonPhrase: "printError body nil"))
+            return
         }
         let content = String(buffer: body)
         guard codes.contains(self.status.code) else {
