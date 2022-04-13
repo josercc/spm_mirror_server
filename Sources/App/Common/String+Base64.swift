@@ -12,14 +12,14 @@ extension String {
     func decodeBase64String() throws -> String {
         guard let data = Data(base64Encoded: self),
               let decodeString = String(data: data, encoding: .utf8) else {
-            throw Abort(.expectationFailed)
+            throw Abort(.custom(code: 10000, reasonPhrase: "decodeBase64String error"))
         }
         return decodeString
     }
     
     func encodeBase64String() throws -> String {
         guard let data = self.data(using: .utf8) else {
-            throw Abort(.expectationFailed)
+            throw Abort(.custom(code: 10000, reasonPhrase: "encodeBase64String error"))
         }
         return data.base64EncodedString()
     }

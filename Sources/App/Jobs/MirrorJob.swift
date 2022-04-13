@@ -21,7 +21,7 @@ struct MirrorJob: MirrorAsyncJob {
             if exitStatus == .repoExitOther {
                 /// 仓库存在但是内容不一致
                 WeiXinWebHooks.sendContent("警告：\(waitMirror.mirror)和\(waitMirror.origin)仓库不一致", context.application, payload.config)
-                throw Abort(.expectationFailed)
+                throw Abort(.custom(code: 10000, reasonPhrase: "仓库存在但是内容不一致"))
             }
             /// 如果等待次数小于6 才允许执行等待
             if waitMirror.waitCount <= 2, waitMirror.waitProgressCount <= 120 {
@@ -251,7 +251,7 @@ extension MirrorJob {
         var dst = dst ?? "spm_mirror"
         /// 获取仓库名称
         guard let repo = repoNamePath(from: origin) else {
-            throw Abort(.expectationFailed)
+            throw Abort(.custom(code: 10000, reasonPhrase: "\(origin) 获取项目名称失败"))
         }
         /// 获取镜像仓库地址
         let mirrorRepo = "https://gitee.com/\(dst)/\(repo)"
@@ -290,7 +290,7 @@ extension MirrorJob {
         context.logger.info("开始更新\(origin)镜像")
         /// 获取镜像之后的组织
         guard let dst = repoOriginPath(from: mirror, host: "https://gitee.com/") else {
-            throw Abort(.expectationFailed)
+            throw Abort(.custom(code: 10000, reasonPhrase: "update  repoOriginPath 失败"))
         }
         /// 获取GiteeApi
         let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
