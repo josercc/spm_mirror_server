@@ -78,7 +78,7 @@ public struct GithubApi {
     }
     
     func fetchRunStatus(repo:String, in client:Client) async throws -> RunStatus {
-        let uri = URI(string: "\(host)/repos/josercc/sync2gitee/actions/runs?per_page=1")
+        let uri = URI(string: "\(host)/repos/josercc/sync2gitee/actions/runs?per_page=10")
         let response = try await client.get(uri, beforeSend: { request in
             request.headers = headers
         })
@@ -107,6 +107,39 @@ public struct GithubApi {
             return .failure
         } else {
             return .success
+        }
+    }
+
+    /// 获取最新10条Run的状态
+    func fetchRunStatus(in client:Client) async throws -> [RunStatus] {
+        let uri = URI(string: "\(host)/repos/josercc/sync2gitee/actions/runs?per_page=10")
+        let response = try await client.get(uri, beforeSend: { request in
+            request.headers = headers
+        })
+        try response.printError(app: app, uri: uri)
+        let runResponse = try response.content.decode(FetchRunStatusResponse.self, using: JSONDecoder.custom(keys:.convertFromSnakeCase))
+        return runResponse.workflowRuns.map {
+            if $0.status == "queued" {
+                return .queued
+            } else if $0.status == "in_progress" {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXX"
+                guard let runStartedAt = $0.runStartedAt,
+                      let date = dateFormatter.date(from: runStartedAt) else {
+                    return .inProgress
+                }
+                let waitTime = Date().timeIntervalSince1970 - date.timeIntervalSince1970
+                guard waitTime > 1 * 60 * 60 else {
+                    return .inProgress
+                }
+                return .timeOut
+            } else if $0.status == "completed",
+                      let conclusion = $0.conclusion,
+                      conclusion == "failure" {
+                return .failure
+            } else {
+                return .success
+            }
         }
     }
 

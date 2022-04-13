@@ -198,22 +198,27 @@ extension MirrorJob {
         context.logger.info("开始创建YML文件:->>\(origin)")
         /// 创建 Github api
         let githubApi = try GithubApi(app: context.application, token: payload.config.githubToken, repo: payload.config.githubRepo)
-        /// 查询YML Run状态
-        let runStatus = try await githubApi.fetchRunStatus(repo: payload.config.githubRepo, in: context.application.client)
+        /// 获取最近10条Run运行状态
+        let runStatus = try await githubApi.fetchRunStatus(in: context.application.client)
+        /// 查询runStatus 是否存在还在运行
+        let runStatusExist = runStatus.contains { (run) -> Bool in
+            run == .inProgress || run == .queued
+        }
         /// 如果处于等待和制作中 则开启新的任务
-        if runStatus == .queued || runStatus == .inProgress {
-            context.logger.info("YML已经正在制作中,延时30秒开启新任务")
+        if runStatusExist {
+            context.logger.info("当前存在运行的任务,等待30秒开启新的任务")
             /// 开启新任务
-            try await start(context, payload)
+            try await start(context, payload, 30)
             return
+        }
+        /// 获取当前项目所有的yml文件
+        let ymlFiles = try await githubApi.getContents(name: "josercc", repo: payload.config.githubRepo, path: ".github/workflows")
+        for ymlFile in ymlFiles {
+            /// 删除yml文件
+            try await githubApi.deleteYml(fileName: ymlFile.name, in: context.application.client)
         }
         /// 获取YML文件路径
         let ymlPath = try getYmlFilePath(url: origin)
-        /// 如果 YML存在就删除 YML文件
-        let ymlExit = try await githubApi.ymlExit(file: ymlPath, in: context.application.client)
-        if ymlExit {
-            try await githubApi.deleteYml(fileName: ymlPath, in: context.application.client)
-        }
         guard let src = repoOriginPath(from: origin) else {
             throw Abort(.custom(code: 10000, reasonPhrase: "\(origin) 获取组织名称失败"))
         }
