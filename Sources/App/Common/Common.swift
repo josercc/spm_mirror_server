@@ -103,7 +103,7 @@ extension ClientResponse {
 }
 
 /// 检查镜像仓库是否存在
-func checkMirrorRepoExit<T: JobPayload>(_ context: QueueContext, _ payload: T, _ origin:String, _ mirror:String) async throws -> Bool {
+func checkMirrorRepoExit<T: JobPayload>(_ context: QueueContext, _ payload: T, _ origin:String, _ mirror:String) async throws -> CheckMirrorRepoExitStatus {
     let githubApi = try GithubApi(app: context.application, token: payload.config.githubToken, repo: payload.config.githubRepo)
     guard let githubOrg = repoOriginPath(from: origin) else {
         throw Abort(.custom(code: 10000, reasonPhrase: "\(origin)中获取组织或者用户失败"))
@@ -119,12 +119,18 @@ func checkMirrorRepoExit<T: JobPayload>(_ context: QueueContext, _ payload: T, _
         throw Abort(.custom(code: 10000, reasonPhrase: "\(mirror)中获取组织或者用户失败"))
     }
     let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
+    /// 获取仓库是否存在
+    guard try await giteeApi.checkRepoExit(owner: giteeOrg, repo: githubName, in: context.application.client) else {
+        return .repoNotExit
+    }
     let giteePackageContents = try await giteeApi.getFileContent(name: giteeOrg, repo: githubName, path: "Package.swift", in: context.application.client)
     guard let giteePakcageContent = giteePackageContents.first else {
-        return false
+        return .repoEmpty
     }
     guard githubPakcageContent.content.replacingOccurrences(of: "\n", with: "") == giteePakcageContent.content else {
-        return false
+        return .repoExitOther
     }
-    return true
+    return .repoExit
 }
+
+

@@ -8,18 +8,25 @@ struct MirrorJob: MirrorAsyncJob {
         let waitMirrors = try await Mirror.query(on: context.application.db).filter(\.$isExit == false).all()
         for waitMirror in waitMirrors {
             /// 查询镜像是否在 gitee 存在
-            let isExit = try await checkMirrorRepoExit(context, payload, waitMirror.origin, waitMirror.mirror)
-            /// 如果存在就执行success
-            if isExit {
+            let exitStatus = try await checkMirrorRepoExit(context, payload, waitMirror.origin, waitMirror.mirror)
+            if exitStatus == .repoExit {
                 try await success(context, payload, waitMirror.origin)
                 return
+            }
+            if exitStatus == .repoEmpty {
+                /// 仓库存在但是为空
+                /// 删除空仓库
+                try await deleteRepo(context, payload, waitMirror.mirror, waitMirror.origin)
+            }
+            if exitStatus == .repoExitOther {
+                /// 仓库存在但是内容不一致
+                WeiXinWebHooks.sendContent("警告：\(waitMirror.mirror)和\(waitMirror.origin)仓库不一致", context.application, payload.config)
+                throw Abort(.expectationFailed)
             }
             /// 如果等待次数小于6 才允许执行等待
             if waitMirror.waitCount <= 2, waitMirror.waitProgressCount <= 120 {
                 try await wait(context, payload, waitMirror)
                 return
-            } else if try await checkMirrorRepoExit(context, payload, waitMirror.origin, waitMirror.mirror) {
-                try await success(context, payload, waitMirror.origin)
             } else {
                 continue
             }
@@ -129,7 +136,7 @@ extension MirrorJob {
                 WeiXinWebHooks.sendContent("\(mirror.origin)镜像制作\(mirror.mirror)失败,请检查镜像是否正常制作", context.application, payload.config)
                 let ymlFile = try getYmlFilePath(url: mirror.origin)
                 try await githubApi.deleteYml(fileName: ymlFile, in: context.application.client)
-                try await deleteRepo(context, payload, mirror: mirror.mirror)
+                try await deleteRepo(context, payload, mirror.mirror, mirror.origin)
                 /// 重新开始任务
                 try await start(context, payload)
                 return
@@ -138,7 +145,7 @@ extension MirrorJob {
         guard let dst = repoOriginPath(from: mirror.mirror, host: "https://gitee.com/") else {
             throw Abort(.custom(code: 10000, reasonPhrase: "获取镜像组织名称失败"))
         }
-        try await deleteRepo(context, payload, mirror: mirror.mirror)
+        try await deleteRepo(context, payload, mirror.mirror, mirror.origin)
         try await createYml(context, payload, mirror.origin, dst)
     }
 }
@@ -245,12 +252,21 @@ extension MirrorJob {
         let mirrorRepo = "https://gitee.com/\(dst)/\(repo)"
         /// 检测镜像仓库是否被其他仓库占用
         let mirrorRepoExists = try await Mirror.query(on: context.application.db).filter(\.$mirror == mirrorRepo).filter(\.$origin != origin).count() > 0
+        /// 获取镜像在Gitee的状态
+        let mirrorStatus = try await checkMirrorRepoExit(context, payload, origin, mirrorRepo)
         /// 如果镜像仓库被其他仓库占用开启新的任务
-        if mirrorRepoExists {
+        if mirrorRepoExists || mirrorStatus == .repoExitOther {
             context.logger.info("镜像仓库被其他仓库占用: \(mirrorRepo)")
             dst += "1"
             try await create(context, payload, origin, dst)
             return
+        }
+        if mirrorStatus == .repoExit {
+            try await success(context, payload, origin)
+            return
+        } else if mirrorStatus == .repoEmpty {
+            /// 删除空的镜像仓库
+            try await deleteRepo(context, payload, mirrorRepo, origin)
         }
         /// 如果镜像不存在则保存新镜像
         let count = try await Mirror.query(on: context.application.db).filter(\.$origin == origin).count()
@@ -258,10 +274,6 @@ extension MirrorJob {
             /// 保存新的镜像
             let mirrorData = Mirror(origin: origin, mirror: mirrorRepo)
             try await mirrorData.save(on: context.application.db)
-        }
-        if try await checkMirrorRepoExit(context, payload, origin, mirrorRepo) {
-            try await success(context, payload, origin)
-            return
         }
         /// 创建 YML文件
         try await createYml(context, payload, origin, dst)
@@ -294,7 +306,7 @@ extension MirrorJob {
 }
 
 extension MirrorJob {
-    func deleteRepo(_ context:QueueContext, _ payload:Payload, mirror:String) async throws {
+    func deleteRepo(_ context:QueueContext, _ payload:Payload, _ mirror:String, _ origin:String) async throws {
         /// 获取GiteeApi
         let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
         guard let org = repoOriginPath(from: mirror, host: "https://gitee.com/") else {
@@ -303,11 +315,13 @@ extension MirrorJob {
         guard let name = repoNamePath(from: mirror, host: "https://gitee.com/") else {
             throw Abort(.badRequest, reason: "仓库地址错误")
         }
-        let repoPath = repoPath(from: mirror, host: "https://gitee.com/")
-        /// 如果镜像在Gitee存在，但是不存在Package 则删除仓库
-        if try await giteeApi.checkRepoExit(repo: repoPath, in: context.application.client), try await giteeApi.getFileContent(name: org, repo: "Package.swift", in: context.application.client).count == 0 {
-            try await giteeApi.deleteRepo(name: name, repo: org, in: context.application.client)
-        }
+        /// 获取仓库状态
+        let repoStatus = try await checkMirrorRepoExit(context, payload, origin, mirror)
+        guard repoStatus == .repoEmpty else{
+            return
+        }   
+        /// 删除仓库
+        try await giteeApi.deleteRepo(name: org, repo: name, in: context.application.client)
     }
 }
 

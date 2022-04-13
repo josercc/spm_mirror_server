@@ -38,12 +38,17 @@ public class GiteeApi {
         try response.printError(app: app, uri: uri, codes: [201])
     }
     
-    func checkRepoExit(repo:String, in client:Client) async throws -> Bool {
-       let uri = URI(string: "https://gitee.com/api/v5/search/repositories?access_token=\(token)&q=\(repo)")
-       let response = try await client.get(uri)
-       try response.printError(app: app, uri: uri)
-       let repos = try response.content.decode([Repo].self)
-       return repos.count > 0
+    func checkRepoExit(owner:String, repo:String, in client:Client) async throws -> Bool {
+        let uri = URI(string: "https://gitee.com/api/v5/search/repositories?access_token=\(token)&q=\(repo)&owner=\(owner)")
+        let response = try await client.get(uri)
+        try response.printError(app: app, uri: uri)
+        let repos = try response.content.decode([Repo].self, using: JSONDecoder.custom(keys: .convertFromSnakeCase))
+        let repoPath = "\(owner)/\(repo)"
+        let filters = repos.filter { repo in
+            /// 因为不区分大小写，所以需要转换一下
+            return repo.fullName.lowercased() == repoPath.lowercased()
+        }
+        return filters.count > 0
     }
 
     /// 检查组织是否存在
@@ -79,8 +84,20 @@ public class GiteeApi {
         let response = try await client.delete(uri)
         try response.printError(app: app, uri: uri, codes: [204,404])
     }
+
+    func canImport(name:String, repo:String, in client:Client) async throws -> Bool {
+        let uri = URI(string: "https://gitee.com/projects/check_project_duplicate?import_url=https%3A%2F%2Fgithub.com%2F\(name)%2F\(repo)")
+        let response = try await client.get(uri)
+        try response.printError(app: app, uri: uri)
+        let data = try response.content.decode(CanImportResponse.self, using: JSONDecoder.custom(keys: .convertFromSnakeCase))
+        return !data.isDuplicate
+    }
 }
 
 struct Repo: Codable {
-    
+    let fullName:String
+}
+
+struct CanImportResponse: Content {
+    let isDuplicate:Bool
 }
