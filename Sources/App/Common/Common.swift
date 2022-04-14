@@ -119,11 +119,18 @@ func checkMirrorRepoExit<T: JobPayload>(_ context: QueueContext, _ payload: T, _
         throw Abort(.custom(code: 10000, reasonPhrase: "\(mirror)中获取组织或者用户失败"))
     }
     let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
+    let exitRepos = try await giteeApi.checkRepoExit(owner: giteeOrg, repo: githubName, in: context.application.client)
     /// 获取仓库是否存在
-    guard try await giteeApi.checkRepoExit(owner: giteeOrg, repo: githubName, in: context.application.client) else {
+    guard let repo = exitRepos.first  else {
         return .repoNotExit
     }
-    let giteePackageContents = try await giteeApi.getFileContent(name: giteeOrg, repo: githubName, path: "Package.swift", in: context.application.client)
+    guard let exitOrg = repoOriginPath(from: repo.fullName) else {
+        throw Abort(.custom(code: 10000, reasonPhrase: "\(repo.fullName)中获取组织或者用户失败"))
+    }
+    guard let exitName = repoNamePath(from: repo.fullName) else {
+        throw Abort(.custom(code: 10000, reasonPhrase: "\(repo.fullName)中获取仓库名称失败"))
+    }
+    let giteePackageContents = try await giteeApi.getFileContent(name: exitOrg, repo: exitName, path: "Package.swift", in: context.application.client)
     guard let giteePakcageContent = giteePackageContents.first?.content else {
         return .repoEmpty
     }

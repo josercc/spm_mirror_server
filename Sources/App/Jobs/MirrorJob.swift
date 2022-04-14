@@ -227,7 +227,13 @@ extension MirrorJob {
         guard let repo = repoNamePath(from: origin) else {
             throw Abort(.custom(code: 10000, reasonPhrase: "\(origin) 获取项目名称失败"))
         }
-        /// 创建 YML 内容
+        /// giteeApi
+        let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
+        /// 检测 dst 是否存在
+        let dstExist = try await giteeApi.checkOrgExit(org: dst, in: context.application.client)
+        if !dstExist {
+            try await giteeApi.createOrg(client: context.application.client, name: dst)
+        }
         let ymlContent = actionContent(src: src, dst: dst, isOrg: isOrg, repo: repo)
         /// 创建 YML文件
         guard try await githubApi.addGithubAction(fileName: ymlPath, content: ymlContent, client: context.application.client) else {

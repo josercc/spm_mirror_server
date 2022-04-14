@@ -38,7 +38,7 @@ public class GiteeApi {
         try response.printError(app: app, uri: uri, codes: [201])
     }
     
-    func checkRepoExit(owner:String, repo:String, in client:Client) async throws -> Bool {
+    func checkRepoExit(owner:String, repo:String, in client:Client) async throws -> [Repo] {
         let uri = URI(string: "https://gitee.com/api/v5/search/repositories?access_token=\(token)&q=\(repo)&owner=\(owner)")
         let response = try await client.get(uri)
         try response.printError(app: app, uri: uri)
@@ -48,7 +48,7 @@ public class GiteeApi {
             /// 因为不区分大小写，所以需要转换一下
             return repo.fullName.lowercased() == repoPath.lowercased()
         }
-        return filters.count > 0
+        return filters
     }
 
     /// 检查组织是否存在
