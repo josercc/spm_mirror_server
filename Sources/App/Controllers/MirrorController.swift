@@ -39,7 +39,9 @@ struct MirrorController: RouteCollection {
         /// 获取请求的内容
         let mirrorContent = try req.query.decode(MirrorContent.self)
         /// 请求需要进行的镜像仓库
-        let originUrl = mirrorContent.url
+        var originUrl = mirrorContent.url
+        /// 去掉后缀 .git
+        originUrl = originUrl.replacingOccurrences(of: ".git", with: "")
         /// 保存请求记录
         let mirrorRequest = MirrorRequest(url: originUrl)
         try await mirrorRequest.save(on: req.db)
