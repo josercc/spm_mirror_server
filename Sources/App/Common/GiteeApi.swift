@@ -92,6 +92,16 @@ public class GiteeApi {
         let data = try response.content.decode(CanImportResponse.self, using: JSONDecoder.custom(keys: .convertFromSnakeCase))
         return !data.isDuplicate
     }
+
+    /// 获取一个组织目前的项目数量
+    func getOrgProjectsCount(org:String, in client:Client) async throws -> Int {
+        let uri = URI(string: "https://gitee.com/api/v5/orgs/\(org)?access_token=\(token)")
+        let response = try await client.get(uri)
+        try response.printError(app: app, uri: uri)
+        let data = try response.content.decode(Project.self, using: JSONDecoder.custom(keys: .convertFromSnakeCase))
+        let count = data.publicRepos + data.privateRepos
+        return count
+    }
 }
 
 struct Repo: Codable {
@@ -100,4 +110,11 @@ struct Repo: Codable {
 
 struct CanImportResponse: Content {
     let isDuplicate:Bool
+}
+
+struct Project: Content {
+    /// public_repos
+    let publicRepos:Int
+    /// private_repos
+    let privateRepos:Int
 }

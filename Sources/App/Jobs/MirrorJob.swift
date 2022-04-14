@@ -266,9 +266,13 @@ extension MirrorJob {
         let mirrorRepoExists = try await Mirror.query(on: context.application.db).filter(\.$mirror == mirrorRepo).filter(\.$origin != origin).count() > 0
         /// 获取镜像在Gitee的状态
         let mirrorStatus = try await checkMirrorRepoExit(context, payload, origin, mirrorRepo)
+        /// 获取 giteeApi
+        let giteeApi = try GiteeApi(app: context.application, token: payload.config.giteeToken)
+        /// 获取组织的仓库数量
+        let orgRepoCount = try await giteeApi.getOrgProjectsCount(org: dst, in: context.application.client)
         /// 如果镜像仓库被其他仓库占用开启新的任务
-        if mirrorRepoExists || mirrorStatus == .repoExitOther {
-            context.logger.info("镜像仓库被其他仓库占用: \(mirrorRepo)")
+        if mirrorRepoExists || mirrorStatus == .repoExitOther || orgRepoCount >= 1000 {
+            context.logger.info("当前组织无法创建\(origin)镜像,使用新的组织")
             dst += "1"
             try await create(context, payload, origin, dst)
             return
